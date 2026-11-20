@@ -3,7 +3,7 @@ import React, { useEffect, useMemo } from 'react';
 import { X, ShieldCheck, Calendar, Pencil, Trash2, Hash, Lock, Check } from 'lucide-react';
 import { modalCss } from '../products/modalStyles';
 import { brandCss } from '../brands/brandStyles';
-import { roleCss } from './roleStyles';
+import { roleCss } from './Rolestyles';
 // import { groupPermissions } from '.RoleForm';
 import { groupPermissions } from './Roleformmodal';
 

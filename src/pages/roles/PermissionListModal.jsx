@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Lock, Pencil, Trash2, Plus, Save, Search, Loader2, AlertCircle } from 'lucide-react';
 import { listPermissions, createPermission, updatePermission, deletePermission } from '../../services/rolePermissionService';
 import { modalCss } from '../products/modalStyles';
-import { roleCss } from './roleStyles';
+import { roleCss } from './Rolestyles';
 import ConfirmDeleteModal from '../brands/ConfirmDeleteModal';
 
 const extractArray = (res) => {

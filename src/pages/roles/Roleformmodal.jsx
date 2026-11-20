@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Save, ShieldCheck, Pencil, Search, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { createRole, updateRole, listPermissions } from '../../services/rolePermissionService';
 import { modalCss } from '../products/modalStyles';
-import { roleCss } from './roleStyles';
+import { roleCss } from './Rolestyles';
 
 const extractArray = (res) => {
   if (Array.isArray(res)) return res;
