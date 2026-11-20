@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { ShoppingBag, DollarSign, Gauge, BadgePercent, Search, Download, RefreshCw, Printer, Eye, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../../components/Layout';
 import { getPurchaseReports } from '../../services/reportService';
+import ToastrContainer, { toastr } from '../../components/Toastr';
+import { useTranslation } from '../../utils/translations';
 
 const PAGE_SIZE = 10;
 const css = `
@@ -56,11 +58,9 @@ const css = `
 .pr-select { height: 38px; max-width: 170px; padding: 0 30px 0 12px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: #f1f6f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a8280' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; border: 1.5px solid transparent; border-radius: 11px; appearance: none; cursor: pointer; }
 .pr-select:hover { background-color: #e9f1ef; }
 
-/* logo tile */
 .pr-logo { position: relative; width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 17px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
 .pr-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 5px; background: #fff; }
 
-/* list */
 .pr-head, .pr-row { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,.9fr) 84px; gap: 14px; align-items: center; padding: 0 18px; }
 .pr-head { height: 38px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: #f7fbfa; border-bottom: 1px solid var(--line); }
 .pr-row { min-height: 66px; border-bottom: 1px solid var(--line); transition: background .12s; animation: pr-slide .4s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 28ms) backwards; }
@@ -80,7 +80,6 @@ const css = `
 .pr-ib.d:hover { background: #fdecea; color: #c0392b; border-color: #f6cfca; }
 .pr-ib:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 
-/* grid */
 .pr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px; }
 .pr-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden;
   transition: transform .22s, box-shadow .22s, border-color .22s; animation: pr-up .45s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 35ms) backwards; }
@@ -200,21 +199,15 @@ const invCss = `
 const num = (v) => parseFloat(v || 0) || 0;
 const money = (n) => num(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const totalOf = (p) => num(p.total ?? p.total_amount);
-const fmtDateTime = (s) => {
-  if (!s) return '';
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
 const statusOf = (p) => String(p.status || '').toLowerCase();
 
-function InvoiceModal({ purchase, autoPrint, onClose }) {
+function InvoiceModal({ purchase, autoPrint, onClose, tpr }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // បោះពុម្ពស្វ័យប្រវត្តិ ពេលចុចប៊ូតុង Print ក្នុងតារាង
   useEffect(() => {
     if (!autoPrint) return undefined;
     const t = setTimeout(() => window.print(), 400);
@@ -261,7 +254,7 @@ function InvoiceModal({ purchase, autoPrint, onClose }) {
               <div className="inv-box">
                 <h5>ព័ត៌មានវិក្កយបត្រ</h5>
                 <dl>
-                  <dt>កាលបរិច្ឆេទ</dt><dd>{fmtDateTime(purchase.created_at) || '-'}</dd>
+                  <dt>កាលបរិច្ឆេទ</dt><dd>{purchase.created_at ? new Date(purchase.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</dd>
                   <dt>វិធីទូទាត់</dt><dd style={{ textTransform: 'uppercase', color: '#0f766e' }}>{purchase.payment_method || 'cash'}</dd>
                   <dt>ស្ថានភាព</dt><dd style={{ textTransform: 'capitalize' }}>{st || '-'}</dd>
                   {purchase.user?.name && (<><dt>អ្នកកត់ត្រា</dt><dd>{purchase.user.name}</dd></>)}
@@ -306,7 +299,6 @@ function InvoiceModal({ purchase, autoPrint, onClose }) {
   );
 }
 
-/* ---------- Page ---------- */
 const TONES = [['#e0f4f1', '#0f766e'], ['#e3eeff', '#2563eb'], ['#eee8ff', '#7c3aed'], ['#fff1d6', '#d97706'], ['#fdecea', '#c0392b'], ['#ecf6d8', '#4d7c0f']];
 const toneFor = (s = '') => TONES[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % TONES.length];
 
@@ -337,14 +329,10 @@ function Tile({ label, target, prefix = '', decimals = 0, icon: Icon, tone, hero
   );
 }
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'cancelled', label: 'Cancelled' },
-];
-
 export default function PurchaseReportPage() {
+  const { lang, t } = useTranslation();
+  const tpr = t.purchaseReports;
+
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -353,7 +341,21 @@ export default function PurchaseReportPage() {
   const [payFilter, setPayFilter] = useState('all');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
-  const [invoice, setInvoice] = useState(null); // { purchase, auto }
+  const [invoice, setInvoice] = useState(null);
+
+  const fmtDateTime = (s) => {
+    if (!s) return '';
+    const d = new Date(s);
+    return Number.isNaN(d.getTime())
+      ? ''
+      : d.toLocaleString(lang === 'km' ? 'km-KH' : 'en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+  };
 
   useEffect(() => {
     fetchPurchases();
@@ -368,7 +370,9 @@ export default function PurchaseReportPage() {
       setPurchases(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error('Error fetching purchase reports:', err);
-      setErrorMsg(err?.message || 'បរាជ័យក្នុងការទាញយករបាយការណ៍ការទិញចូល');
+      const msg = err?.message || tpr.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tpr.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
@@ -419,28 +423,36 @@ export default function PurchaseReportPage() {
     URL.revokeObjectURL(url);
   };
 
+  const FILTERS = [
+    { key: 'all', label: tpr.filterAll },
+    { key: 'completed', label: tpr.filterCompleted },
+    { key: 'pending', label: tpr.filterPending },
+    { key: 'cancelled', label: tpr.filterCancelled },
+  ];
+
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="pr">
         <div className="pr-top">
           <div>
-            <h2>📦 របាយការណ៍ការទិញចូលស្តុក</h2>
-            <p>ប្រវត្តិការបញ្ជាទិញទំនិញពី Supplier លម្អិត និងបោះពុម្ពវិក្កយបត្រ</p>
+            <h2>{tpr.heading}</h2>
+            <p>{tpr.subHeading}</p>
           </div>
           <div className="pr-actions">
-            <button className="pr-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> Export CSV</button>
-            <button className="pr-btn primary" onClick={fetchPurchases} disabled={loading}><RefreshCw size={16} className={loading ? 'pr-spin' : ''} /> Refresh</button>
+            <button className="pr-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> {tpr.exportCsv}</button>
+            <button className="pr-btn primary" onClick={fetchPurchases} disabled={loading}><RefreshCw size={16} className={loading ? 'pr-spin' : ''} /> {tpr.refresh}</button>
           </div>
         </div>
 
-        {errorMsg && <div className="pr-err" role="alert"><span>{errorMsg}</span><button onClick={fetchPurchases}>Try again</button></div>}
+        {errorMsg && <div className="pr-err" role="alert"><span>{errorMsg}</span><button onClick={fetchPurchases}>{tpr.tryAgain}</button></div>}
 
         <div className="pr-tiles">
-          <Tile label="ចំណាយសរុប (Total Spent)" target={stats.spent} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
-          <Tile label="ចំនួនដងទិញចូល" target={stats.counts.all} icon={ShoppingBag} tone="t-blue" delay={70} />
-          <Tile label="មធ្យមក្នុងមួយដង" target={stats.avg} prefix="$" decimals={2} icon={Gauge} tone="t-green" delay={140} />
-          <Tile label="បញ្ចុះតម្លៃទទួលបាន" target={stats.discount} prefix="$" decimals={2} icon={BadgePercent} tone="t-amber" delay={210} />
+          <Tile label={tpr.tileSpent} target={stats.spent} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
+          <Tile label={tpr.tileCount} target={stats.counts.all} icon={ShoppingBag} tone="t-blue" delay={70} />
+          <Tile label={tpr.tileAvg} target={stats.avg} prefix="$" decimals={2} icon={Gauge} tone="t-green" delay={140} />
+          <Tile label={tpr.tileDiscount} target={stats.discount} prefix="$" decimals={2} icon={BadgePercent} tone="t-amber" delay={210} />
         </div>
 
         <section className="pr-panel">
@@ -448,8 +460,8 @@ export default function PurchaseReportPage() {
             <div className="pr-left">
               <div className="pr-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរក Supplier, ក្រុមហ៊ុន, លេខវិក្កយបត្រ…" aria-label="Search purchases" />
-                {search && <button className="pr-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={tpr.searchPlaceholder} aria-label="Search purchases" />
+                {search && <button className="pr-x" onClick={() => reset(setSearch)('')} aria-label={tpr.clearSearch}><X size={15} /></button>}
               </div>
               <div className="pr-seg" role="group" aria-label="Status">
                 {FILTERS.map((f) => <button key={f.key} className={`pr-sb${statusFilter === f.key ? ' on' : ''}`} aria-pressed={statusFilter === f.key} onClick={() => reset(setStatusFilter)(f.key)}>{f.label} <span style={{ opacity: .6 }}>{stats.counts[f.key]}</span></button>)}
@@ -458,33 +470,33 @@ export default function PurchaseReportPage() {
             <div className="pr-right">
               {payments.length > 0 && (
                 <select className="pr-select" value={payFilter} onChange={(e) => reset(setPayFilter)(e.target.value)} aria-label="Payment method">
-                  <option value="all">All payments</option>
+                  <option value="all">{tpr.allPayments}</option>
                   {payments.map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}
                 </select>
               )}
               <select className="pr-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort purchases">
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="total">Total: high to low</option>
+                <option value="newest">{tpr.sortNewest}</option>
+                <option value="oldest">{tpr.sortOldest}</option>
+                <option value="total">{tpr.sortTotal}</option>
               </select>
             </div>
           </div>
 
           <div className="pr-head">
-            <span>Invoice</span><span>Supplier</span><span className="pr-hide-m pr-hide-md">Breakdown</span><span style={{ textAlign: 'right' }}>Total</span><span>Status</span><span />
+            <span>{tpr.colInvoice}</span><span>{tpr.colSupplier}</span><span className="pr-hide-m pr-hide-md">{tpr.colBreakdown}</span><span style={{ textAlign: 'right' }}>{tpr.colTotal}</span><span>{tpr.colStatus}</span><span />
           </div>
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="pr-skel" key={i}><i style={{ width: 40, height: 40, borderRadius: 12 }} /><i style={{ width: '30%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="pr-empty">
-              <b>{purchases.length === 0 ? 'មិនមានប្រវត្តិទិញទំនិញទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {purchases.length > 0 && 'Try a different search, status or payment filter.'}
+              <b>{purchases.length === 0 ? tpr.emptyNoData : tpr.emptyNoResult}</b>
+              {purchases.length > 0 && tpr.emptyHint}
             </div>
           ) : (
             <div key={`${statusFilter}-${payFilter}-${sort}-${current}`}>
               {rows.map((p, i) => {
-                const supName = p.supplier?.name || 'គ្មាន Supplier';
+                const supName = p.supplier?.name || tpr.noSupplier;
                 const [bg, fg] = toneFor(p.supplier?.company || supName);
                 const st = statusOf(p);
                 return (
@@ -505,8 +517,8 @@ export default function PurchaseReportPage() {
                     <div className="pr-total pr-c-total"><b>${money(totalOf(p))}</b><span className="pr-pay">{p.payment_method || 'cash'}</span></div>
                     <span className={`pr-badge ${st}`}>{st ? st.charAt(0).toUpperCase() + st.slice(1) : '-'}</span>
                     <div className="pr-acts">
-                      <button className="pr-ib v" onClick={() => setInvoice({ purchase: p, auto: false })} aria-label="Preview invoice" title="មើលវិក្កយបត្រ"><Eye size={15} /></button>
-                      <button className="pr-ib p" onClick={() => setInvoice({ purchase: p, auto: true })} aria-label="Print invoice" title="បោះពុម្ព"><Printer size={15} /></button>
+                      <button className="pr-ib v" onClick={() => setInvoice({ purchase: p, auto: false })} aria-label="Preview invoice" title={tpr.viewInvoiceTitle}><Eye size={15} /></button>
+                      <button className="pr-ib p" onClick={() => setInvoice({ purchase: p, auto: true })} aria-label="Print invoice" title={tpr.printInvoiceTitle}><Printer size={15} /></button>
                     </div>
                   </div>
                 );
@@ -516,7 +528,7 @@ export default function PurchaseReportPage() {
 
           {!loading && visible.length > 0 && (
             <div className="pr-foot">
-              <span>Showing {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} of {visible.length}</span>
+              <span>{tpr.showing} {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} {tpr.of} {visible.length}</span>
               <div className="pr-pager">
                 <button className="pr-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -527,7 +539,7 @@ export default function PurchaseReportPage() {
         </section>
       </div>
 
-      {invoice && <InvoiceModal purchase={invoice.purchase} autoPrint={invoice.auto} onClose={() => setInvoice(null)} />}
+      {invoice && <InvoiceModal purchase={invoice.purchase} autoPrint={invoice.auto} onClose={() => setInvoice(null)} tpr={tpr} />}
     </Layout>
   );
 }

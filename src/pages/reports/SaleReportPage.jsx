@@ -14,9 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-
-// ឬ import ឈ្មោះ service ជាក់ស្តែងរបស់បង
 import { getSalesReports } from "../../services/reportService";
+import ToastrContainer, { toastr } from "../../components/Toastr";
+import { useTranslation } from "../../utils/translations";
 
 const PAGE_SIZE = 10;
 
@@ -232,13 +232,6 @@ const css = `
 const money = (val) =>
   Number(val || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDateTime = (dateStr) => {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("km-KH");
-};
-
-// ពណ៌ស្ថានភាព៖ completed = បៃតង, រង់ចាំ = លឿង, បោះបង់/សងប្រាក់ = ក្រហម
 function statusTone(status) {
   const s = String(status || "").toLowerCase();
   if (["completed", "paid", "done", "success"].includes(s)) return "ok";
@@ -248,6 +241,9 @@ function statusTone(status) {
 }
 
 export default function SaleReportPage() {
+  const { lang, t } = useTranslation();
+  const tsr = t.saleReports;
+
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -255,9 +251,22 @@ export default function SaleReportPage() {
   const [page, setPage] = useState(1);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_WIDTH);
 
-  // State សម្រាប់គ្រប់គ្រង Modal ពេលចុច Print វិក្កយបត្រនីមួយៗ
   const [selectedSale, setSelectedSale] = useState(null);
   const [printPending, setPrintPending] = useState(false);
+
+  const fmtDateTime = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return Number.isNaN(d.getTime())
+      ? ""
+      : d.toLocaleString(lang === "km" ? "km-KH" : "en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  };
 
   useEffect(() => {
     fetchSales();
@@ -267,24 +276,23 @@ export default function SaleReportPage() {
     try {
       setLoading(true);
       setErrorMsg("");
-      // ហៅ Service យកទិន្នន័យ
       const res = await getSalesReports();
       const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
       setSales(list);
     } catch (err) {
       console.error("Error fetching sale reports:", err);
-      setErrorMsg(err?.message || "បរាជ័យក្នុងការទាញយករបាយការណ៍ការលក់");
+      const msg = err?.message || tsr.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tsr.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // ត្រឡប់ទៅទំព័រទី ១ ពេលស្វែងរកថ្មី
   useEffect(() => {
     setPage(1);
   }, [search]);
 
-  // បិទ Modal ដោយចុច Esc
   useEffect(() => {
     if (!selectedSale) return undefined;
     const onKey = (e) => {
@@ -294,14 +302,13 @@ export default function SaleReportPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedSale]);
 
-  // បោះពុម្ពបន្ទាប់ពី Modal បង្ហាញរួច
   useEffect(() => {
     if (!selectedSale || !printPending) return undefined;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setPrintPending(false);
       window.print();
     }, 350);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [selectedSale, printPending]);
 
   const closeSheet = () => {
@@ -334,16 +341,15 @@ export default function SaleReportPage() {
     return { totalOrders, totalRevenue, average };
   }, [sales]);
 
-  // ទំព័រ (Pagination)
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const start = (safePage - 1) * PAGE_SIZE;
   const pageItems = filteredSales.slice(start, start + PAGE_SIZE);
 
   const statCards = [
-    { label: "ចំណូលសរុប", value: `$${money(stats.totalRevenue)}`, icon: DollarSign, tone: "t1", money: true },
-    { label: "ចំនួនវិក្កយបត្រលក់សរុប", value: stats.totalOrders, unit: "ដង", icon: ShoppingBag, tone: "t2" },
-    { label: "មធ្យមក្នុងមួយវិក្កយបត្រ", value: `$${money(stats.average)}`, icon: TrendingUp, tone: "t3" },
+    { label: tsr.statTotalRevenue, value: `$${money(stats.totalRevenue)}`, icon: DollarSign, tone: "t1", money: true },
+    { label: tsr.statTotalOrders, value: stats.totalOrders, unit: tsr.timesSuffix, icon: ShoppingBag, tone: "t2" },
+    { label: tsr.statAverage, value: `$${money(stats.average)}`, icon: TrendingUp, tone: "t3" },
   ];
 
   const hasSearch = search.trim() !== "";
@@ -353,6 +359,7 @@ export default function SaleReportPage() {
   return (
     <>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="sr">
         <div className="sr-noprint">
           <Sidebar onCollapseChange={(_, width) => setSidebarWidth(width)} />
@@ -370,15 +377,16 @@ export default function SaleReportPage() {
                 </div>
                 <div>
                   <h2 className="sr-title">
-                    របាយការណ៍ការលក់<small>Sale Reports</small>
+                    {tsr.heading}
+                    {lang === "km" && <small>Sale Reports</small>}
                   </h2>
-                  <p className="sr-sub">ប្រវត្តិវិក្កយបត្រការលក់ និងបញ្ជីទំនិញអតិថិជន</p>
+                  <p className="sr-sub">{tsr.subHeading}</p>
                 </div>
               </div>
 
               <button className="sr-btn ghost" onClick={fetchSales} disabled={loading}>
                 <RefreshCw size={16} className={loading ? "sr-spin" : ""} />
-                <span>ផ្ទុកឡើងវិញ</span>
+                <span>{tsr.refresh}</span>
               </button>
             </div>
 
@@ -407,7 +415,7 @@ export default function SaleReportPage() {
               <div className="sr-error" role="alert">
                 <span>{errorMsg}</span>
                 <button type="button" onClick={fetchSales}>
-                  ព្យាយាមម្តងទៀត
+                  {tsr.tryAgain}
                 </button>
               </div>
             )}
@@ -419,13 +427,13 @@ export default function SaleReportPage() {
                   <Search size={17} />
                   <input
                     type="text"
-                    placeholder="ស្វែងរកតាមលេខវិក្កយបត្រ ឬឈ្មោះអតិថិជន..."
+                    placeholder={tsr.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="ស្វែងរកវិក្កយបត្រ"
+                    aria-label={tsr.searchPlaceholder}
                   />
                   {hasSearch && (
-                    <button type="button" className="sr-clear" onClick={() => setSearch("")} aria-label="លុបការស្វែងរក">
+                    <button type="button" className="sr-clear" onClick={() => setSearch("")} aria-label={tsr.clearSearch}>
                       <X size={16} />
                     </button>
                   )}
@@ -433,7 +441,7 @@ export default function SaleReportPage() {
               </div>
 
               {loading ? (
-                <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+                <div aria-busy="true">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div className="sr-skel-row" key={i}>
                       <div className="sr-skel" style={{ width: 120 }} />
@@ -449,14 +457,14 @@ export default function SaleReportPage() {
                   <div className="sr-emptyico">
                     <ShoppingBag size={32} strokeWidth={1.7} />
                   </div>
-                  <h3 className="sr-emptytitle">{hasSearch ? "រកមិនឃើញវិក្កយបត្រទេ" : "មិនមានទិន្នន័យការលក់ទេ"}</h3>
+                  <h3 className="sr-emptytitle">{hasSearch ? tsr.emptySearch : tsr.emptyNoData}</h3>
                   <p className="sr-emptytext">
-                    {hasSearch ? "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង" : "នៅពេលមានការលក់ ទិន្នន័យនឹងបង្ហាញនៅទីនេះ"}
+                    {hasSearch ? tsr.emptySubSearch : tsr.emptySubNoData}
                   </p>
                   {hasSearch && (
                     <button className="sr-btn ghost" onClick={() => setSearch("")}>
                       <X size={16} />
-                      <span>លុបការស្វែងរក</span>
+                      <span>{tsr.clearSearch}</span>
                     </button>
                   )}
                 </div>
@@ -476,14 +484,14 @@ export default function SaleReportPage() {
                       </colgroup>
                       <thead>
                         <tr>
-                          <th># លេខវិក្កយបត្រ</th>
-                          <th>អតិថិជន</th>
-                          <th>ប្រភេទ</th>
-                          <th style={{ textAlign: "right" }}>Subtotal</th>
-                          <th style={{ textAlign: "right" }}>Total</th>
-                          <th style={{ textAlign: "center" }}>ស្ថានភាព</th>
-                          <th>កាលបរិច្ឆេទ</th>
-                          <th style={{ textAlign: "center" }}>សកម្មភាព</th>
+                          <th>{tsr.colInvoiceNo}</th>
+                          <th>{tsr.colCustomer}</th>
+                          <th>{tsr.colType}</th>
+                          <th style={{ textAlign: "right" }}>{tsr.colSubtotal}</th>
+                          <th style={{ textAlign: "right" }}>{tsr.colTotal}</th>
+                          <th style={{ textAlign: "center" }}>{tsr.colStatus}</th>
+                          <th>{tsr.colDate}</th>
+                          <th style={{ textAlign: "center" }}>{tsr.colActions}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -499,7 +507,7 @@ export default function SaleReportPage() {
                               </td>
                               <td>
                                 <div className="sr-cust">
-                                  <div className={`sr-custname${name ? "" : " walk"}`}>{name || "អតិថិជនទូទៅ"}</div>
+                                  <div className={`sr-custname${name ? "" : " walk"}`}>{name || tsr.walkInCustomer}</div>
                                   {s.customer?.phone && <div className="sr-custphone">{s.customer.phone}</div>}
                                 </div>
                               </td>
@@ -518,8 +526,8 @@ export default function SaleReportPage() {
                                     type="button"
                                     className="sr-act"
                                     onClick={() => openView(s)}
-                                    title="មើល"
-                                    aria-label={`មើលវិក្កយបត្រ ${label}`}
+                                    title={tsr.viewTitle}
+                                    aria-label={`${tsr.viewTitle} ${label}`}
                                   >
                                     <Eye size={17} />
                                   </button>
@@ -527,8 +535,8 @@ export default function SaleReportPage() {
                                     type="button"
                                     className="sr-act"
                                     onClick={() => openPrint(s)}
-                                    title="បោះពុម្ព"
-                                    aria-label={`បោះពុម្ពវិក្កយបត្រ ${label}`}
+                                    title={tsr.printTitle}
+                                    aria-label={`${tsr.printTitle} ${label}`}
                                   >
                                     <Printer size={17} />
                                   </button>
@@ -544,7 +552,7 @@ export default function SaleReportPage() {
                   {/* Pager */}
                   <div className="sr-pager">
                     <div className="sr-pinfo">
-                      បង្ហាញ <b>{start + 1}–{start + pageItems.length}</b> ក្នុងចំណោម <b>{filteredSales.length}</b>
+                      {tsr.showing} <b>{start + 1}–{start + pageItems.length}</b> {tsr.of} <b>{filteredSales.length}</b>
                     </div>
                     <div className="sr-pnav">
                       <button
@@ -552,7 +560,7 @@ export default function SaleReportPage() {
                         className="sr-pbtn"
                         onClick={() => setPage(safePage - 1)}
                         disabled={safePage <= 1}
-                        aria-label="ទំព័រមុន"
+                        aria-label="Previous page"
                       >
                         <ChevronLeft size={18} />
                       </button>
@@ -564,7 +572,7 @@ export default function SaleReportPage() {
                         className="sr-pbtn"
                         onClick={() => setPage(safePage + 1)}
                         disabled={safePage >= totalPages}
-                        aria-label="ទំព័របន្ទាប់"
+                        aria-label="Next page"
                       >
                         <ChevronRight size={18} />
                       </button>
@@ -586,7 +594,7 @@ export default function SaleReportPage() {
               aria-labelledby="sr-sheet-title"
               onClick={(e) => e.stopPropagation()}
             >
-              <button className="sr-x sr-noprint" onClick={closeSheet} aria-label="បិទ">
+              <button className="sr-x sr-noprint" onClick={closeSheet} aria-label={tsr.closeBtn}>
                 <X size={18} />
               </button>
 
@@ -595,49 +603,49 @@ export default function SaleReportPage() {
                 <div className="sr-sheethead">
                   <span className="sr-badge">Sales Invoice</span>
                   <h2 className="sr-sheettitle" id="sr-sheet-title">
-                    វិក្កយបត្រលក់ទំនិញ
+                    {tsr.modalTitle}
                   </h2>
                   <p className="sr-sheetno">
-                    លេខវិក្កយបត្រ៖ <b>{selectedSale.order_number || `#${selectedSale.id}`}</b>
+                    {tsr.modalInvoiceNo} <b>{selectedSale.order_number || `#${selectedSale.id}`}</b>
                   </p>
                 </div>
 
                 {/* Info Grid */}
                 <div className="sr-info">
                   <div className="sr-infobox">
-                    <h4 className="sr-infohead">ព័ត៌មានអតិថិជន</h4>
-                    <p className="sr-infoname">{selectedSale.customer?.name || "អតិថិជនទូទៅ"}</p>
+                    <h4 className="sr-infohead">{tsr.customerInfoTitle}</h4>
+                    <p className="sr-infoname">{selectedSale.customer?.name || tsr.walkInCustomer}</p>
                     <p>
-                      ទូរស័ព្ទ៖ <b>{selectedSale.customer?.phone || "N/A"}</b>
+                      {tsr.phoneLabel} <b>{selectedSale.customer?.phone || "N/A"}</b>
                     </p>
-                    <p>អាសយដ្ឋាន៖ {selectedSale.customer?.address || "N/A"}</p>
+                    <p>{tsr.addressLabel} {selectedSale.customer?.address || "N/A"}</p>
                   </div>
 
                   <div className="sr-infobox">
-                    <h4 className="sr-infohead">ព័ត៌មានវិក្កយបត្រ</h4>
+                    <h4 className="sr-infohead">{tsr.invoiceInfoTitle}</h4>
                     <p>
-                      កាលបរិច្ឆេទ៖ <b>{fmtDateTime(selectedSale.created_at) || "-"}</b>
+                      {tsr.dateLabel} <b>{fmtDateTime(selectedSale.created_at) || "-"}</b>
                     </p>
                     <p>
-                      ប្រភេទ៖ <span className="sr-infotype">{selectedSale.order_type || "Dine-in"}</span>
+                      {tsr.typeLabel} <span className="sr-infotype">{selectedSale.order_type || "Dine-in"}</span>
                     </p>
                     <p>
-                      ស្ថានភាព៖{" "}
+                      {tsr.statusLabel}{" "}
                       <span className={`sr-status ${statusTone(selectedSale.status)}`}>{selectedSale.status || "-"}</span>
                     </p>
                   </div>
                 </div>
 
                 {/* Items */}
-                <h4 className="sr-sec">បញ្ជីទំនិញ (Products Bought)</h4>
+                <h4 className="sr-sec">{tsr.itemsListTitle}</h4>
                 <table className="sr-items">
                   <thead>
                     <tr>
-                      <th style={{ width: 48 }}>ល.រ</th>
-                      <th>ឈ្មោះទំនិញ</th>
-                      <th className="c">ចំនួន</th>
-                      <th className="r">តម្លៃឯកតា</th>
-                      <th className="r">សរុប</th>
+                      <th style={{ width: 48 }}>{tsr.colNo}</th>
+                      <th>{tsr.colProductName}</th>
+                      <th className="c">{tsr.colQty}</th>
+                      <th className="r">{tsr.colUnitPrice}</th>
+                      <th className="r">{tsr.colItemTotal}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -645,7 +653,7 @@ export default function SaleReportPage() {
                       details.map((item, i) => (
                         <tr key={item.id ?? i}>
                           <td>{i + 1}</td>
-                          <td className="pn">{item.product?.name || item.product_name || "ទំនិញ"}</td>
+                          <td className="pn">{item.product?.name || item.product_name || tsr.defaultProduct}</td>
                           <td className="c qty">{Number(item.quantity)}</td>
                           <td className="r">${money(item.unit_price)}</td>
                           <td className="r sum">
@@ -656,7 +664,7 @@ export default function SaleReportPage() {
                     ) : (
                       <tr>
                         <td colSpan="5" className="none">
-                          (គ្មានទិន្នន័យ Details ភ្ជាប់មកជាមួយទេ)
+                          {tsr.noDetails}
                         </td>
                       </tr>
                     )}
@@ -667,19 +675,19 @@ export default function SaleReportPage() {
                 <div className="sr-totals">
                   <div className="sr-totalbox">
                     <div className="sr-trow">
-                      <span>ទឹកប្រាក់រង (Subtotal)</span>
+                      <span>{tsr.subtotalLabel}</span>
                       <span>${money(selectedSale.subtotal)}</span>
                     </div>
                     <div className={`sr-trow disc${discount > 0 ? "" : " zero"}`}>
-                      <span>បញ្ចុះតម្លៃ (Discount)</span>
+                      <span>{tsr.discountLabel}</span>
                       <span>-${money(discount)}</span>
                     </div>
                     <div className="sr-trow line">
-                      <span>ពន្ធ (Tax)</span>
+                      <span>{tsr.taxLabel}</span>
                       <span>${money(selectedSale.tax_amount)}</span>
                     </div>
                     <div className="sr-grand">
-                      <span>សរុប (Total)</span>
+                      <span>{tsr.grandTotalLabel}</span>
                       <b>${money(selectedSale.total_amount)}</b>
                     </div>
                   </div>
@@ -689,11 +697,11 @@ export default function SaleReportPage() {
               {/* Modal Actions */}
               <div className="sr-sheetfoot sr-noprint">
                 <button className="sr-btn ghost" onClick={closeSheet}>
-                  បិទ
+                  {tsr.closeBtn}
                 </button>
                 <button className="sr-btn primary" onClick={() => window.print()}>
                   <Printer size={16} />
-                  <span>បោះពុម្ពវិក្កយបត្រ</span>
+                  <span>{tsr.printInvoiceBtn}</span>
                 </button>
               </div>
             </div>

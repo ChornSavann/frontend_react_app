@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -23,6 +23,15 @@ import FinancialReportPage from "./pages/reports/FinancialReportPage";
 import ReportsPage from "./pages/reports/ReportsPage";
 import CustomerReportPage from "./pages/reports/CustomerReportPage";
 import ProfitLossReportPage from "./pages/reports/ProfitLossReportPage";
+import VendorInvoicePage from "./pages/VendorInvoicePage";
+import StockAdjustmentPage from "./pages/StockAdjustmentPage";
+import CatalogPage from "./pages/CatalogPage";
+import { applyTheme } from "./utils/darkMode";
+import ToastrContainer from "./components/Toastr";
+import ManageDeliveryPage from "./pages/ManageDeliveryPage";
+import POSPage from "./pages/POSPage";
+import AuthLogsPage from "./pages/AuthLogsPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("auth_token");
@@ -30,8 +39,18 @@ const ProtectedRoute = ({ children }) => {
 };
 
 export default function App() {
+  useEffect(() => {
+    const isDark = localStorage.getItem("theme") === "dark";
+    applyTheme(isDark);
+
+    const savedLang = localStorage.getItem("app_lang") || "en";
+    document.documentElement.lang = savedLang;
+  }, []);
+
   return (
     <BrowserRouter>
+      <ToastrContainer />
+
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 
@@ -52,6 +71,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/inventory"
           element={
@@ -69,6 +89,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/customers"
           element={
@@ -77,6 +98,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/brands"
           element={
@@ -85,6 +107,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/categories"
           element={
@@ -93,6 +116,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/expenses"
           element={
@@ -101,6 +125,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/expense-types"
           element={
@@ -109,6 +134,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/suppliers"
           element={
@@ -162,6 +188,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/reports/sales"
           element={
@@ -188,6 +215,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/reports/financial"
           element={
@@ -198,13 +226,14 @@ export default function App() {
         />
 
         <Route
-          path="/reports"
+          path="/reports-overview"
           element={
             <ProtectedRoute>
               <ReportsPage />
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/reports/customers"
           element={
@@ -213,16 +242,71 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
-         path="/reports/profit-loss"
+          path="/reports/profit-loss"
           element={
             <ProtectedRoute>
               <ProfitLossReportPage />
             </ProtectedRoute>
           }
         />
-      
-        {/* <Route path="/reports" element={<DailyMonthlyReportPage />} /> */}
+
+        <Route
+          path="/vendor-invoices"
+          element={
+            <ProtectedRoute>
+              <VendorInvoicePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/stock-adjustment"
+          element={
+            <ProtectedRoute>
+              <StockAdjustmentPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/catalog"
+          element={
+            <ProtectedRoute>
+              <CatalogPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/orders/delivery-orders"
+          element={
+            <ProtectedRoute>
+              <ManageDeliveryPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/orders"
+          element={
+            <ProtectedRoute>
+              <POSPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/auth-logs"
+          element={
+            <ProtectedRoute>
+              <AuthLogsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>

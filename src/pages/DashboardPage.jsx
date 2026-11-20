@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 import Layout from "../components/Layout";
 import { getDashboardAnalytics } from "../services/dashboardService";
+import ToastrContainer, { toastr } from "../components/Toastr";
+import { useTranslation } from "../utils/translations";
 
-/* ---------- Helpers ---------- */
 const money = (n) =>
   `$${Number(n || 0).toLocaleString("en-US", {
     minimumFractionDigits: Number(n) % 1 !== 0 ? 2 : 0,
@@ -46,7 +47,10 @@ function useCountUp(target, decimals = 0, duration = 1100) {
   const [v, setV] = useState(0);
   useEffect(() => {
     const cleanTarget = Number(target || 0);
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
       setV(cleanTarget);
       return undefined;
     }
@@ -61,19 +65,21 @@ function useCountUp(target, decimals = 0, duration = 1100) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target, duration]);
-  return v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return v.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
-/* ---------- Small pieces ---------- */
 function Sparkline({ data = [], color }) {
   const safeData = data.length >= 2 ? data : [0, 0, 0, 0, 0, 0, 0, 0];
-  const W = 88;
-  const H = 34;
+  const W = 72;
+  const H = 26;
   const min = Math.min(...safeData);
   const max = Math.max(...safeData);
   const pts = safeData.map((v, i) => [
     (i * (W - 4)) / (safeData.length - 1) + 2,
-    H - 4 - ((v - min) / (max - min || 1)) * (H - 8),
+    H - 3 - ((v - min) / (max - min || 1)) * (H - 6),
   ]);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="db-spark" aria-hidden="true">
@@ -81,7 +87,7 @@ function Sparkline({ data = [], color }) {
         d={smooth(pts)}
         fill="none"
         stroke={color}
-        strokeWidth="2.2"
+        strokeWidth="2.1"
         strokeLinecap="round"
         pathLength="1"
         className="db-draw"
@@ -90,27 +96,48 @@ function Sparkline({ data = [], color }) {
   );
 }
 
-function Kpi({ k, index }) {
+function Kpi({ k, index, td }) {
   const Icon = k.icon;
   const up = k.change >= 0;
   const Arrow = up ? ArrowUpRight : ArrowDownRight;
   const shown = useCountUp(k.target, k.decimals);
   const hero = k.tone === "dark";
+
   return (
-    <div className={`db-card c3 db-kpi${hero ? " hero" : ""}`} style={{ "--d": `${index * 70}ms` }}>
+    <div
+      className={`db-card c3 db-kpi${hero ? " hero" : ""}`}
+      style={{ "--d": `${index * 60}ms` }}
+    >
+      {/* ជួរលើ៖ Icon + Label នៅឆ្វេង, Delta Pill នៅស្តាំ */}
       <div className="db-kpi-top">
-        <div className={`db-chip tone-${k.tone}`}>
-          <Icon size={19} strokeWidth={1.9} />
+        <div className="db-kpi-head">
+          <div className={`db-chip tone-${k.tone}`}>
+            <Icon size={16} strokeWidth={2.1} />
+          </div>
+          <span className="db-kpi-label">{k.label}</span>
         </div>
-        <Sparkline data={k.spark} color={hero ? "#ffffff" : up ? "#1f8a7d" : "#d9961b"} />
+        <div
+          className={`db-delta-pill ${up ? "up" : "down"}`}
+          title={td.vsLastMonth}
+        >
+          <Arrow size={12} strokeWidth={2.5} />
+          <span>{Math.abs(k.change)}%</span>
+        </div>
       </div>
-      <span className="db-kpi-label">{k.label}</span>
-      <b className="db-kpi-val">
-        {k.prefix}
-        {shown}
-      </b>
-      <div className={`db-delta ${up ? "up" : "down"}`}>
-        <Arrow size={14} /> {Math.abs(k.change)}% <em>vs. last month</em>
+
+      {/* ជួរក្រោម៖ តួលេខនៅឆ្វេង, Sparkline នៅស្តាំ */}
+      <div className="db-kpi-bot">
+        <div className="db-kpi-valwrap">
+          <b className="db-kpi-val">
+            {k.prefix}
+            {shown}
+          </b>
+          <em className="db-kpi-sub">{td.vsLastMonth}</em>
+        </div>
+        <Sparkline
+          data={k.spark}
+          color={hero ? "#c8f169" : up ? "#1f8a7d" : "#e15b4f"}
+        />
       </div>
     </div>
   );
@@ -120,7 +147,8 @@ function TrendChart({ range, trendLabels = [], trendValues = [] }) {
   const labels = range === 6 ? trendLabels.slice(-6) : trendLabels;
   const values = range === 6 ? trendValues.slice(-6) : trendValues;
   const safeValues = values.length > 1 ? values : [0, 0, 0, 0, 0, 0];
-  const safeLabels = labels.length > 1 ? labels : ["-", "-", "-", "-", "-", "-"];
+  const safeLabels =
+    labels.length > 1 ? labels : ["-", "-", "-", "-", "-", "-"];
 
   const W = 560;
   const H = 200;
@@ -143,7 +171,13 @@ function TrendChart({ range, trendLabels = [], trendValues = [] }) {
     const r = e.currentTarget.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
     setHover(
-      Math.max(0, Math.min(safeValues.length - 1, Math.round(((px - L) / (W - L - R)) * (safeValues.length - 1)))),
+      Math.max(
+        0,
+        Math.min(
+          safeValues.length - 1,
+          Math.round(((px - L) / (W - L - R)) * (safeValues.length - 1)),
+        ),
+      ),
     );
   };
   const idx = hover ?? safeValues.length - 1;
@@ -166,24 +200,68 @@ function TrendChart({ range, trendLabels = [], trendValues = [] }) {
       </defs>
       {ticks.map((t, idxT) => (
         <g key={idxT}>
-          <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#e4eeeb" strokeDasharray="3 5" />
+          <line
+            x1={L}
+            x2={W - R}
+            y1={y(t)}
+            y2={y(t)}
+            stroke="#e4eeeb"
+            strokeDasharray="3 5"
+          />
           <text x={L - 8} y={y(t) + 4} textAnchor="end" className="db-axis">
             {t === 0 ? "0" : shortMoney(t)}
           </text>
         </g>
       ))}
       <path d={area} fill="url(#db-area)" className="db-fade" />
-      <path d={line} fill="none" stroke="#1f8a7d" strokeWidth="2.8" strokeLinecap="round" pathLength="1" className="db-draw slow" />
+      <path
+        d={line}
+        fill="none"
+        stroke="#1f8a7d"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        pathLength="1"
+        className="db-draw slow"
+      />
       {safeLabels.map((l, i) => (
-        <text key={`${l}-${i}`} x={x(i)} y={H - 7} textAnchor="middle" className="db-axis">
+        <text
+          key={`${l}-${i}`}
+          x={x(i)}
+          y={H - 7}
+          textAnchor="middle"
+          className="db-axis"
+        >
           {l}
         </text>
       ))}
       <g className="db-tip">
-        <line x1={x(idx)} x2={x(idx)} y1={T} y2={y(0)} stroke="#1f8a7d" strokeOpacity=".3" strokeDasharray="3 4" />
-        <circle cx={x(idx)} cy={y(safeValues[idx])} r="9" fill="#1f8a7d" opacity=".15" />
-        <circle cx={x(idx)} cy={y(safeValues[idx])} r="4.5" fill="#fff" stroke="#1f8a7d" strokeWidth="2.5" />
-        <g transform={`translate(${tx} ${Math.max(2, y(safeValues[idx]) - 46)})`}>
+        <line
+          x1={x(idx)}
+          x2={x(idx)}
+          y1={T}
+          y2={y(0)}
+          stroke="#1f8a7d"
+          strokeOpacity=".3"
+          strokeDasharray="3 4"
+        />
+        <circle
+          cx={x(idx)}
+          cy={y(safeValues[idx])}
+          r="9"
+          fill="#1f8a7d"
+          opacity=".15"
+        />
+        <circle
+          cx={x(idx)}
+          cy={y(safeValues[idx])}
+          r="4.5"
+          fill="#fff"
+          stroke="#1f8a7d"
+          strokeWidth="2.5"
+        />
+        <g
+          transform={`translate(${tx} ${Math.max(2, y(safeValues[idx]) - 46)})`}
+        >
           <rect width="86" height="34" rx="9" fill="#0f3733" />
           <text x="43" y="14" textAnchor="middle" className="db-tip-l">
             {safeLabels[idx]}
@@ -197,13 +275,25 @@ function TrendChart({ range, trendLabels = [], trendValues = [] }) {
   );
 }
 
-function Donut({ categories = [], totalAmount = 0 }) {
+function Donut({ categories = [], totalAmount = 0, totalSalesLabel }) {
   const r = 50;
   let start = 0;
   return (
-    <svg viewBox="0 0 140 140" className="db-donut" role="img" aria-label="Sales by category">
+    <svg
+      viewBox="0 0 140 140"
+      className="db-donut"
+      role="img"
+      aria-label="Sales by category"
+    >
       <g transform="rotate(-90 70 70)">
-        <circle cx="70" cy="70" r={r} fill="none" stroke="#edf4f1" strokeWidth="17" />
+        <circle
+          cx="70"
+          cy="70"
+          r={r}
+          fill="none"
+          stroke="#edf4f1"
+          strokeWidth="17"
+        />
         {categories.map((s, i) => {
           const len = Math.max(Number(s.pct || 0) - 1.2, 0.1);
           const el = (
@@ -230,14 +320,17 @@ function Donut({ categories = [], totalAmount = 0 }) {
         {shortMoney(totalAmount)}
       </text>
       <text x="70" y="83" textAnchor="middle" className="db-axis">
-        Total Sales
+        {totalSalesLabel}
       </text>
     </svg>
   );
 }
 
 function ComboChart({ months = [], sales = [], orders = [] }) {
-  const safeMonths = months.length > 0 ? months : ["May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"];
+  const safeMonths =
+    months.length > 0
+      ? months
+      : ["May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"];
   const safeSales = sales.length > 0 ? sales : [0, 0, 0, 0, 0, 0, 0];
   const safeOrders = orders.length > 0 ? orders : [0, 0, 0, 0, 0, 0, 0];
 
@@ -261,14 +354,31 @@ function ComboChart({ months = [], sales = [], orders = [] }) {
   const steps = [0, 1, 2, 3];
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="db-svg" role="img" aria-label="Monthly sales versus orders">
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="db-svg"
+      role="img"
+      aria-label="Monthly sales versus orders"
+    >
       {steps.map((s) => {
         const sVal = Math.round((maxSale * s) / 3);
         const oVal = Math.round((maxOrd * s) / 3);
         return (
           <g key={s}>
-            <line x1={L} x2={W - R} y1={yS(sVal)} y2={yS(sVal)} stroke="#e4eeeb" strokeDasharray="3 5" />
-            <text x={L - 7} y={yS(sVal) + 4} textAnchor="end" className="db-axis">
+            <line
+              x1={L}
+              x2={W - R}
+              y1={yS(sVal)}
+              y2={yS(sVal)}
+              stroke="#e4eeeb"
+              strokeDasharray="3 5"
+            />
+            <text
+              x={L - 7}
+              y={yS(sVal) + 4}
+              textAnchor="end"
+              className="db-axis"
+            >
               {sVal === 0 ? "0" : shortMoney(sVal)}
             </text>
             <text x={W - R + 7} y={yS(sVal) + 4} className="db-axis">
@@ -290,7 +400,15 @@ function ComboChart({ months = [], sales = [], orders = [] }) {
           style={{ animationDelay: `${200 + i * 70}ms` }}
         />
       ))}
-      <path d={line} fill="none" stroke="#0f3733" strokeWidth="2.2" strokeLinecap="round" pathLength="1" className="db-draw slow" />
+      <path
+        d={line}
+        fill="none"
+        stroke="#0f3733"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        pathLength="1"
+        className="db-draw slow"
+      />
       {safeOrders.map((v, i) => (
         <circle
           key={`${safeMonths[i]}-dot`}
@@ -305,7 +423,13 @@ function ComboChart({ months = [], sales = [], orders = [] }) {
         />
       ))}
       {safeMonths.map((m, i) => (
-        <text key={`${m}-${i}`} x={cx(i)} y={H - 7} textAnchor="middle" className="db-axis">
+        <text
+          key={`${m}-${i}`}
+          x={cx(i)}
+          y={H - 7}
+          textAnchor="middle"
+          className="db-axis"
+        >
           {m}
         </text>
       ))}
@@ -313,7 +437,6 @@ function ComboChart({ months = [], sales = [], orders = [] }) {
   );
 }
 
-/* ---------- Styles ---------- */
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap');
 
@@ -369,25 +492,120 @@ const css = `
 .db-seg-btn:hover { color: var(--ink); }
 .db-seg-btn.on { background: #fff; color: var(--teal-d); box-shadow: 0 3px 8px -4px rgba(14,90,81,.5), 0 0 0 1px rgba(31,138,125,.1); }
 
-/* KPI */
-.db-kpi { display: flex; flex-direction: column; position: relative; overflow: hidden; }
-.db-kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.db-chip { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0; }
-.tone-teal { background: #dff1ea; color: #176f65; } .tone-blue { background: #e0f0f7; color: #0f6d8f; }
-.tone-violet { background: #ece9fb; color: #5b4bc4; } .tone-amber { background: #fdf1d6; color: #9a6a0a; }
-.tone-dark { background: rgba(255,255,255,.18); color: #fff; }
-.db-spark { width: 88px; height: 34px; }
-.db-kpi-label { font-size: 13px; color: var(--muted); font-weight: 500; }
-.db-kpi-val { font-size: 26px; font-weight: 800; margin: 1px 0 6px; font-variant-numeric: tabular-nums; line-height: 1.25; }
-.db-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 700; }
-.db-delta.up { color: #4d7c0f; } .db-delta.down { color: #b9382d; }
-.db-delta em { font-style: normal; font-weight: 500; color: var(--muted); margin-left: 3px; }
-.db-kpi.hero { color: #fff; border-color: transparent;
-  background: radial-gradient(260px 140px at 100% 0%, rgba(255,255,255,.2), transparent 65%), linear-gradient(150deg, #19917f 0%, #0e5a51 60%, #0b463f 100%);
-  box-shadow: 0 18px 32px -18px rgba(11,70,63,.7); }
-.db-kpi.hero:hover { box-shadow: 0 22px 38px -18px rgba(11,70,63,.75); }
-.db-kpi.hero .db-kpi-label, .db-kpi.hero .db-delta em { color: rgba(255,255,255,.8); }
-.db-kpi.hero .db-delta.up { color: #d9f59a; } .db-kpi.hero .db-delta.down { color: #ffc9c1; }
+/* KPI - Compact & Sleek */
+.db-kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px !important;
+  border-radius: 15px !important;
+  position: relative;
+  overflow: hidden;
+}
+.db-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.db-kpi-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.db-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.tone-teal { background: #dff1ea; color: #176f65; }
+.tone-blue { background: #e0f0f7; color: #0f6d8f; }
+.tone-violet { background: #ece9fb; color: #5b4bc4; }
+.tone-amber { background: #fdf1d6; color: #9a6a0a; }
+.tone-dark { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+.db-kpi-label {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-delta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.db-delta-pill.up { background: #e8f5d6; color: #3f6212; }
+.db-delta-pill.down { background: #fdeceb; color: #b9382d; }
+
+.db-kpi-bot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+.db-kpi-valwrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.db-kpi-val {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+}
+.db-kpi-sub {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-top: 2px;
+}
+.db-spark {
+  width: 72px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+/* Hero KPI Card (Total Sales) */
+.db-kpi.hero {
+  color: #fff;
+  border-color: transparent;
+  background: radial-gradient(220px 110px at 100% 0%, rgba(200, 241, 105, 0.2), transparent 65%),
+              linear-gradient(145deg, #167a6c 0%, #0d4f47 65%, #093a34 100%);
+  box-shadow: 0 12px 24px -14px rgba(11, 70, 63, 0.7);
+}
+.db-kpi.hero:hover {
+  box-shadow: 0 16px 30px -14px rgba(11, 70, 63, 0.78);
+}
+.db-kpi.hero .db-kpi-label,
+.db-kpi.hero .db-kpi-sub {
+  color: rgba(255, 255, 255, 0.78);
+}
+.db-kpi.hero .db-delta-pill.up {
+  background: rgba(200, 241, 105, 0.22);
+  color: #d9f99d;
+}
+.db-kpi.hero .db-delta-pill.down {
+  background: rgba(255, 201, 193, 0.2);
+  color: #fecaca;
+}
 
 /* charts */
 .db-svg { display: block; width: 100%; height: auto; }
@@ -480,9 +698,13 @@ const INSIGHT_ICONS = {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { lang, t } = useTranslation();
+  const td = t.dashboard;
+
   const userName = localStorage.getItem("user_name") || "Admin";
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greeting =
+    hour < 12 ? td.morning : hour < 18 ? td.afternoon : td.evening;
 
   const [range, setRange] = useState(12);
   const [loading, setLoading] = useState(true);
@@ -501,7 +723,9 @@ export default function DashboardPage() {
       setDashboard(res?.data || res);
     } catch (err) {
       console.error("Error loading dashboard analytics:", err);
-      setErrorMsg(err?.message || "បរាជ័យក្នុងការទាញយកទិន្នន័យ Dashboard");
+      const msg = err?.message || td.fetchError;
+      setErrorMsg(msg);
+      toastr.error(td.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
@@ -510,7 +734,7 @@ export default function DashboardPage() {
   const kpiData = dashboard?.kpis || {};
   const kpiList = [
     {
-      label: "Total Sales",
+      label: td.kpiSales,
       target: kpiData.total_sales?.target ?? 0,
       prefix: "$",
       decimals: 2,
@@ -520,7 +744,7 @@ export default function DashboardPage() {
       spark: kpiData.total_sales?.spark || [0, 0, 0, 0, 0, 0, 0, 0],
     },
     {
-      label: "Total Orders",
+      label: td.kpiOrders,
       target: kpiData.total_orders?.target ?? 0,
       prefix: "",
       decimals: 0,
@@ -530,7 +754,7 @@ export default function DashboardPage() {
       spark: kpiData.total_orders?.spark || [0, 0, 0, 0, 0, 0, 0, 0],
     },
     {
-      label: "Total Customers",
+      label: td.kpiCustomers,
       target: kpiData.total_customers?.target ?? 0,
       prefix: "",
       decimals: 0,
@@ -540,7 +764,7 @@ export default function DashboardPage() {
       spark: kpiData.total_customers?.spark || [0, 0, 0, 0, 0, 0, 0, 0],
     },
     {
-      label: "Avg. Order Value",
+      label: td.kpiAvgOrder,
       target: kpiData.avg_order_value?.target ?? 0,
       prefix: "$",
       decimals: 2,
@@ -560,6 +784,7 @@ export default function DashboardPage() {
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="db">
         <div className="db-top">
           <div className="db-titlewrap">
@@ -570,15 +795,23 @@ export default function DashboardPage() {
               <h2 className="db-title">
                 {greeting}, {userName}
               </h2>
-              <p className="db-sub">Here is how your shop is doing this month.</p>
+              <p className="db-sub">{td.subHeading}</p>
             </div>
           </div>
           <div className="db-top-actions">
-            <button className="db-btn-sec" onClick={fetchDashboard} disabled={loading}>
-              <RefreshCw size={16} className={loading ? "db-spin" : ""} /> Refresh
+            <button
+              className="db-btn-sec"
+              onClick={fetchDashboard}
+              disabled={loading}
+            >
+              <RefreshCw size={16} className={loading ? "db-spin" : ""} />{" "}
+              {td.refresh}
             </button>
-            <button className="db-cta" onClick={() => navigate("/sales-history")}>
-              <History size={17} /> ប្រវត្តិការលក់ (Sales History)
+            <button
+              className="db-cta"
+              onClick={() => navigate("/sales-history")}
+            >
+              <History size={17} /> {td.salesHistoryBtn}
             </button>
           </div>
         </div>
@@ -586,19 +819,19 @@ export default function DashboardPage() {
         {errorMsg && (
           <div className="db-err" role="alert">
             <span>{errorMsg}</span>
-            <button onClick={fetchDashboard}>ព្យាយាមម្តងទៀត</button>
+            <button onClick={fetchDashboard}>{td.tryAgain}</button>
           </div>
         )}
 
         <div className="db-grid">
           {kpiList.map((k, i) => (
-            <Kpi key={k.label} k={k} index={i} />
+            <Kpi key={k.label} k={k} index={i} td={td} />
           ))}
 
           {/* Sales Trend */}
           <div className="db-card c5" style={{ "--d": "280ms" }}>
             <div className="db-head">
-              <h3>Sales Trend</h3>
+              <h3>{td.salesTrendTitle}</h3>
               <div className="db-segs" role="tablist" aria-label="Range">
                 {[6, 12].map((r) => (
                   <button
@@ -624,13 +857,19 @@ export default function DashboardPage() {
           {/* Sales by Category */}
           <div className="db-card c4" style={{ "--d": "350ms" }}>
             <div className="db-head">
-              <h3>Sales by Category</h3>
+              <h3>{td.salesByCategoryTitle}</h3>
             </div>
             <div className="db-split">
-              <Donut categories={categories} totalAmount={dashboard?.category_total || kpiData.total_sales?.target || 0} />
+              <Donut
+                categories={categories}
+                totalAmount={
+                  dashboard?.category_total || kpiData.total_sales?.target || 0
+                }
+                totalSalesLabel={td.totalSalesLabel}
+              />
               <ul className="db-legend">
                 {categories.length === 0 ? (
-                  <li style={{ color: "#5b7873" }}>មិនទាន់មានទិន្នន័យទេ</li>
+                  <li style={{ color: "#5b7873" }}>{td.emptyInsights}</li>
                 ) : (
                   categories.map((c) => (
                     <li key={c.name}>
@@ -647,11 +886,11 @@ export default function DashboardPage() {
           {/* Top 5 Products */}
           <div className="db-card c3" style={{ "--d": "420ms" }}>
             <div className="db-head">
-              <h3>Top 5 Products</h3>
+              <h3>{td.topProductsTitle}</h3>
             </div>
             <div className="db-bars">
               {topProducts.length === 0 ? (
-                <div className="db-empty">មិនទាន់មានទិន្នន័យលក់ទំនិញទេ</div>
+                <div className="db-empty">{td.emptyInsights}</div>
               ) : (
                 topProducts.map((p, i) => (
                   <div key={p.name}>
@@ -676,38 +915,44 @@ export default function DashboardPage() {
           {/* Recent Sales */}
           <div className="db-card c5" style={{ "--d": "490ms" }}>
             <div className="db-head">
-              <h3>Recent Sales</h3>
-              <button className="db-link" onClick={() => navigate("/sales-history")}>
-                View all
+              <h3>{td.recentSalesTitle}</h3>
+              <button
+                className="db-link"
+                onClick={() => navigate("/sales-history")}
+              >
+                {td.viewAll}
               </button>
             </div>
             <div style={{ overflowX: "auto" }}>
               <table className="db-table">
                 <thead>
                   <tr>
-                    <th>Customer</th>
-                    <th>Order</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: "right" }}>Total</th>
+                    <th>{td.colCustomer}</th>
+                    <th>{td.colOrder}</th>
+                    <th>{td.colStatus}</th>
+                    <th style={{ textAlign: "right" }}>{td.colTotal}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentOrders.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="db-empty">
-                        មិនទាន់មានវិក្កយបត្រលក់ទេ
+                        {td.emptyRecent}
                       </td>
                     </tr>
                   ) : (
                     recentOrders.map((o, i) => {
                       const [bg, fg] = AV_TONES[i % AV_TONES.length];
-                      const customer = String(o.customer || "Walk-in");
+                      const customer = String(o.customer || td.walkIn);
                       const status = String(o.status || "");
                       return (
                         <tr key={o.id ?? i}>
                           <td>
                             <div className="db-who">
-                              <span className="db-av" style={{ background: bg, color: fg }}>
+                              <span
+                                className="db-av"
+                                style={{ background: bg, color: fg }}
+                              >
                                 {customer.charAt(0).toUpperCase()}
                               </span>
                               {customer}
@@ -716,10 +961,15 @@ export default function DashboardPage() {
                           <td className="db-oid">#{String(o.id).slice(-6)}</td>
                           <td>
                             <span className={`db-badge ${status}`}>
-                              {status ? status.charAt(0).toUpperCase() + status.slice(1) : "-"}
+                              {status
+                                ? status.charAt(0).toUpperCase() +
+                                  status.slice(1)
+                                : "-"}
                             </span>
                           </td>
-                          <td className="r">${Number(o.total || 0).toFixed(2)}</td>
+                          <td className="r">
+                            ${Number(o.total || 0).toFixed(2)}
+                          </td>
                         </tr>
                       );
                     })
@@ -732,15 +982,15 @@ export default function DashboardPage() {
           {/* Sales vs Orders */}
           <div className="db-card c4" style={{ "--d": "560ms" }}>
             <div className="db-head">
-              <h3>Sales vs Orders</h3>
+              <h3>{td.salesVsOrdersTitle}</h3>
               <div className="db-legend-inline">
                 <span>
                   <i />
-                  Sales
+                  {td.legendSales}
                 </span>
                 <span>
                   <i className="o" />
-                  Orders
+                  {td.legendOrders}
                 </span>
               </div>
             </div>
@@ -754,10 +1004,12 @@ export default function DashboardPage() {
           {/* Quick Insights */}
           <div className="db-card c3" style={{ "--d": "630ms" }}>
             <div className="db-head">
-              <h3>Quick Insights</h3>
+              <h3>{td.quickInsightsTitle}</h3>
             </div>
             <ul className="db-ins">
-              {insights.length === 0 && <li className="db-empty">មិនទាន់មានព័ត៌មានទេ</li>}
+              {insights.length === 0 && (
+                <li className="db-empty">{td.emptyInsights}</li>
+              )}
               {insights.map((s, idx) => {
                 const Icon = INSIGHT_ICONS[s.type] || TrendingUp;
                 return (

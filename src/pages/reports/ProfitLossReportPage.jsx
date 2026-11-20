@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import Layout from "../../components/Layout";
 import { getFinancialReport } from "../../services/reportService";
+import ToastrContainer, { toastr } from "../../components/Toastr";
+import { useTranslation } from "../../utils/translations";
 
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap');
@@ -186,7 +188,6 @@ const fmt = (n) =>
   });
 const money = (n) => `${num(n) < 0 ? "-" : ""}$${fmt(n)}`;
 
-// ទឹកប្រាក់ក្នុងក្រឡា៖ គ្មានទិន្នន័យ (0) → "0.00", អវិជ្ជមាន → (1,234.00) ពណ៌ក្រហម
 function Cell({ v, tone }) {
   if (!num(v)) return <td className="pl-zero">0.00</td>;
   if (num(v) < 0) return <td className="pl-neg">({fmt(v)})</td>;
@@ -240,7 +241,6 @@ function Tile({ label, target, icon: Icon, tone, hero, delay, color }) {
   );
 }
 
-// បង្កើត matrix: name → [12 months]
 const buildMatrix = (list, nameFn) => {
   const names = [];
   const map = {};
@@ -264,6 +264,9 @@ const buildMatrix = (list, nameFn) => {
 const sum = (arr) => arr.reduce((s, v) => s + v, 0);
 
 export default function ProfitLossReportPage() {
+  const { lang, t } = useTranslation();
+  const tpl = t.profitLossReports;
+
   const nowYear = new Date().getFullYear();
   const nowMonth = new Date().getMonth();
   const [year, setYear] = useState(nowYear);
@@ -281,7 +284,7 @@ export default function ProfitLossReportPage() {
   }, [year]);
 
   const fetchData = async (override) => {
-    const id = ++reqId.current; // ការពារ response ចាស់ជាន់លើ response ថ្មី
+    const id = ++reqId.current;
     try {
       setLoading(true);
       setErrorMsg("");
@@ -298,7 +301,9 @@ export default function ProfitLossReportPage() {
     } catch (err) {
       if (id !== reqId.current) return;
       console.error("Error loading P&L:", err);
-      setErrorMsg(err?.message || "បរាជ័យក្នុងការទាញយករបាយការណ៍ Profit & Loss");
+      const msg = err?.message || tpl.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tpl.toastErrorTitle, msg);
     } finally {
       if (id === reqId.current) setLoading(false);
     }
@@ -329,7 +334,6 @@ export default function ProfitLossReportPage() {
     );
     const gross = inc.totals.map((v, i) => v - cogs.totals[i]);
     const net = gross.map((v, i) => v - opex.totals[i]);
-    // គ្មានចំណូល → margin = 0 (មិនបង្ហាញ "–" ទៀត)
     const margin = net.map((v, i) =>
       inc.totals[i] > 0 ? (v / inc.totals[i]) * 100 : 0,
     );
@@ -376,7 +380,6 @@ export default function ProfitLossReportPage() {
     lines.push(row("Total Operating Expenses", m.opex.totals, A.opex));
     lines.push(row("Gross Profit", m.gross, A.gross));
     lines.push(row("Net Profit", m.net, A.net));
-    // ការពារ "formula injection" ក្នុង Excel (ឈ្មោះប្រភេទដែលចាប់ផ្តើមដោយ = + - @)
     const cell = (x) => {
       let v = String(x ?? "");
       if (/^[=+\-@\t\r]/.test(v) && Number.isNaN(Number(v))) v = `'${v}`;
@@ -393,9 +396,8 @@ export default function ProfitLossReportPage() {
     URL.revokeObjectURL(url);
   };
 
-  const periodText = `ឆ្នាំ ${year} ${hasRange ? `• ${startDate} ដល់ ${endDate}` : "• ពេញមួយឆ្នាំ"}`;
+  const periodText = `ឆ្នាំ ${year} ${hasRange ? ` (${startDate} ដល់ ${endDate})` : ""}`;
 
-  // ជួរ Section (បិទ/បើកបាន; ពេលបោះពុម្ពបើកទាំងអស់)
   const renderSection = (
     { id, title, icon: Icon, tone, matrix, cellTone, totalLabel, totalTone },
     printMode,
@@ -428,7 +430,7 @@ export default function ProfitLossReportPage() {
             <td>
               <div className="pl-sub">
                 <span className={`pl-dot ${tone}`} />
-                <span className="pl-nodata">មិនមានទិន្នន័យ</span>
+                <span className="pl-nodata">{tpl.noDataText}</span>
               </div>
             </td>
             {Array.from({ length: 12 }, (_, i) => (
@@ -473,7 +475,7 @@ export default function ProfitLossReportPage() {
     <table className="pl-table">
       <thead>
         <tr>
-          <th>ប្រភេទ / ខែ</th>
+          <th>{tpl.colCategoryMonth}</th>
           {MONTH_NAMES.map((mn, i) => (
             <th
               key={mn}
@@ -486,19 +488,19 @@ export default function ProfitLossReportPage() {
               {mn}
             </th>
           ))}
-          <th>សរុប</th>
+          <th>{tpl.colTotal}</th>
         </tr>
       </thead>
       <tbody>
         {renderSection(
           {
             id: "income",
-            title: "ចំណូលពីការលក់ (Revenue)",
+            title: tpl.sectionIncome,
             icon: DollarSign,
             tone: "inc",
             matrix: m.inc,
             cellTone: "pl-val",
-            totalLabel: "សរុបចំណូលពីការលក់",
+            totalLabel: tpl.totalIncomeLabel,
             totalTone: "blue",
           },
           printMode,
@@ -506,12 +508,12 @@ export default function ProfitLossReportPage() {
         {renderSection(
           {
             id: "cogs",
-            title: "ថ្លៃដើមទំនិញ (COGS)",
+            title: tpl.sectionCogs,
             icon: Package,
             tone: "cogs",
             matrix: m.cogs,
             cellTone: "pl-exp",
-            totalLabel: "សរុបថ្លៃដើមទំនិញ",
+            totalLabel: tpl.totalCogsLabel,
             totalTone: "red",
           },
           printMode,
@@ -519,12 +521,12 @@ export default function ProfitLossReportPage() {
         {renderSection(
           {
             id: "opex",
-            title: "ចំណាយប្រតិបត្តិការទូទៅ",
+            title: tpl.sectionOpex,
             icon: Wallet,
             tone: "exp",
             matrix: m.opex,
             cellTone: "pl-exp",
-            totalLabel: "សរុបចំណាយទូទៅ",
+            totalLabel: tpl.totalOpexLabel,
             totalTone: "red",
           },
           printMode,
@@ -533,7 +535,7 @@ export default function ProfitLossReportPage() {
         <tr className="pl-gross">
           <td>
             <span className="pl-netlabel">
-              <TrendingUp size={15} /> ប្រាក់ចំណេញដុល (Sales − COGS)
+              <TrendingUp size={15} /> {tpl.grossProfitLabel}
             </span>
           </td>
           {m.gross.map((v, i) => (
@@ -546,7 +548,7 @@ export default function ProfitLossReportPage() {
         <tr className="pl-net">
           <td>
             <span className="pl-netlabel">
-              <Award size={16} /> ប្រាក់ចំណេញសុទ្ធ (Net Profit)
+              <Award size={16} /> {tpl.netProfitLabel}
             </span>
           </td>
           {m.net.map((v, i) => (
@@ -559,7 +561,7 @@ export default function ProfitLossReportPage() {
         <tr className="pl-margin">
           <td>
             <span className="pl-netlabel">
-              <Percent size={14} /> Net margin
+              <Percent size={14} /> {tpl.netMarginLabel}
             </span>
           </td>
           {m.margin.map((v, i) => (
@@ -608,6 +610,7 @@ export default function ProfitLossReportPage() {
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="pl">
         <div className="pl-top">
           <div className="pl-brand">
@@ -616,24 +619,24 @@ export default function ProfitLossReportPage() {
             </div>
             <div>
               <h2 className="pl-title">
-                របាយការណ៍ចំណូល និងចំណាយ<small>Profit &amp; Loss</small>
+                {tpl.heading}
+                {lang === "km" && <small>Profit &amp; Loss</small>}
               </h2>
               <p className="pl-sub-t">
-                តាមដានលទ្ធផលហិរញ្ញវត្ថុប្រចាំខែ (Jan – Dec) ថ្លៃដើមទំនិញ
-                និងប្រាក់ចំណេញសុទ្ធ
+                {tpl.subHeading}
               </p>
             </div>
           </div>
           <div className="pl-actions">
             <button className="pl-btn" onClick={exportCsv} disabled={loading}>
-              <Download size={16} /> Export CSV
+              <Download size={16} /> {tpl.exportCsv}
             </button>
             <button
               className="pl-btn"
               onClick={() => window.print()}
               disabled={loading}
             >
-              <Printer size={16} /> Print
+              <Printer size={16} /> {tpl.print}
             </button>
             <button
               className="pl-btn primary"
@@ -641,7 +644,7 @@ export default function ProfitLossReportPage() {
               disabled={loading}
             >
               <RefreshCw size={16} className={loading ? "pl-spin" : ""} />{" "}
-              ផ្ទុកឡើងវិញ
+              {tpl.refresh}
             </button>
           </div>
         </div>
@@ -649,13 +652,13 @@ export default function ProfitLossReportPage() {
         {errorMsg && (
           <div className="pl-err" role="alert">
             <span>{errorMsg}</span>
-            <button onClick={() => fetchData()}>ព្យាយាមម្តងទៀត</button>
+            <button onClick={() => fetchData()}>{tpl.tryAgain}</button>
           </div>
         )}
 
         <div className="pl-tiles">
           <Tile
-            label="ចំណូលសរុប (Revenue)"
+            label={tpl.tileRevenue}
             target={A.sales}
             icon={DollarSign}
             tone="t-dark"
@@ -663,7 +666,7 @@ export default function ProfitLossReportPage() {
             delay={0}
           />
           <Tile
-            label="ថ្លៃដើមទិញស្តុក (COGS)"
+            label={tpl.tileCogs}
             target={A.cogs}
             icon={Package}
             tone="t-amber"
@@ -671,7 +674,7 @@ export default function ProfitLossReportPage() {
             delay={60}
           />
           <Tile
-            label="ចំណាយប្រតិបត្តិការ"
+            label={tpl.tileOpex}
             target={A.opex}
             icon={Wallet}
             tone="t-red"
@@ -679,7 +682,7 @@ export default function ProfitLossReportPage() {
             delay={120}
           />
           <Tile
-            label="ប្រាក់ចំណេញសុទ្ធ (Net Profit)"
+            label={tpl.tileNetProfit}
             target={A.net}
             icon={A.net >= 0 ? TrendingUp : TrendingDown}
             tone={A.net >= 0 ? "t-green" : "t-red"}
@@ -692,7 +695,7 @@ export default function ProfitLossReportPage() {
           <div className="pl-fgroup">
             <div className="pl-field">
               <label htmlFor="pl-start">
-                <Calendar size={14} /> ចាប់ពីថ្ងៃទី
+                <Calendar size={14} /> {tpl.startDateLabel}
               </label>
               <input
                 id="pl-start"
@@ -704,7 +707,7 @@ export default function ProfitLossReportPage() {
             </div>
             <div className="pl-field">
               <label htmlFor="pl-end">
-                <Calendar size={14} /> ដល់ថ្ងៃទី
+                <Calendar size={14} /> {tpl.endDateLabel}
               </label>
               <input
                 id="pl-end"
@@ -721,17 +724,17 @@ export default function ProfitLossReportPage() {
               disabled={!hasRange || loading}
               title={hasRange ? "" : "ជ្រើសរើសទាំងថ្ងៃចាប់ផ្តើម និងថ្ងៃបញ្ចប់"}
             >
-              <Search size={16} /> ស្វែងរក
+              <Search size={16} /> {tpl.searchBtn}
             </button>
             {(startDate || endDate) && (
               <button className="pl-btn" onClick={handleResetFilter}>
-                <RotateCcw size={15} /> កំណត់ឡើងវិញ
+                <RotateCcw size={15} /> {tpl.resetBtn}
               </button>
             )}
           </div>
           <div className="pl-field">
             <label htmlFor="pl-year">
-              <Calendar size={14} /> ឆ្នាំរបាយការណ៍
+              <Calendar size={14} /> {tpl.yearLabel}
             </label>
             <select
               id="pl-year"
@@ -750,15 +753,14 @@ export default function ProfitLossReportPage() {
 
         {!loading && empty && !errorMsg && (
           <div className="pl-hint">
-            មិនទាន់មានទិន្នន័យសម្រាប់ {periodText} ទេ
-            ដូច្នេះតម្លៃទាំងអស់បង្ហាញជា 0។
+            {tpl.noDataHint(periodText)}
           </div>
         )}
 
         <section className="pl-card">
           <div className="pl-card-head">
             <h3>
-              <Receipt size={19} /> តារាងវិភាគចំណូល និងចំណាយប្រចាំខែ
+              <Receipt size={19} /> {tpl.cardTitle}
             </h3>
             <span className="pl-period">{periodText}</span>
           </div>

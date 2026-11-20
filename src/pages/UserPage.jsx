@@ -6,6 +6,8 @@ import { listUsers, deleteUser } from "../services/userService";
 import CreateUserModal from "./users/CreateUserModal";
 import EditUserModal from "./users/EditUserModal";
 import ViewUserModal from "./users/ViewUserModal";
+import ToastrContainer, { toastr, sweetConfirm } from "../components/Toastr";
+import { useTranslation } from "../utils/translations";
 import {
   Search,
   Users,
@@ -16,8 +18,6 @@ import {
   Eye,
   Trash2,
   X,
-  Loader2,
-  AlertTriangle,
   Phone,
   Mail,
 } from "lucide-react";
@@ -152,38 +152,17 @@ const css = `
 .us .us-emptytitle { margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--ink); }
 .us-emptytext { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
 
-/* ---------- delete dialog ---------- */
-.us-ovl { position: fixed; inset: 0; z-index: 2100; display: flex; justify-content: center; align-items: center; padding: 20px;
-  background: rgba(15,55,51,.45); backdrop-filter: blur(4px); animation: us-ovl .2s ease both;
-  font-family: 'Plus Jakarta Sans','Noto Sans Khmer',-apple-system,sans-serif; }
-@keyframes us-ovl { from { opacity: 0; } to { opacity: 1; } }
-.us-dlg { width: 100%; max-width: 430px; padding: 28px 26px 24px; text-align: center; background: #fff; border-radius: 22px; color: var(--ink); line-height: 1.6;
-  box-shadow: 0 30px 70px -20px rgba(15,55,51,.5); animation: us-pop .32s cubic-bezier(.2,1.2,.4,1) both; }
-@keyframes us-pop { from { opacity: 0; transform: translateY(14px) scale(.95); } to { opacity: 1; transform: none; } }
-.us-dlgico { position: relative; width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; background: #fdeceb; color: #c8372d; }
-.us-dlgico::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(200,55,45,.25); animation: us-ring 1.8s ease-out infinite; }
-@keyframes us-ring { from { opacity: 1; transform: scale(.9); } to { opacity: 0; transform: scale(1.25); } }
-.us .us-dlg h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
-.us-dlg p { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.7; }
-.us-dlg p strong { color: var(--ink); }
-.us-derr { margin: -8px 0 18px; padding: 10px 12px; border-radius: 12px; text-align: left; font-size: 13px; background: #fff4f2; color: #b42318; border: 1px solid #fcd5cf; }
-.us-dlgbtns { display: flex; gap: 10px; }
-.us-dlgbtns .us-btn { flex: 1; justify-content: center; }
-.us-btn.danger { color: #fff; background: linear-gradient(135deg, #de4b3f, #b9291f); box-shadow: 0 10px 20px -8px rgba(185,41,31,.55); }
-.us-btn.danger:hover:not(:disabled) { transform: translateY(-1px); }
-
 @media (max-width: 720px) {
   .us-body { padding: 20px 16px 36px; }
   .us .us-title small { display: block; margin: 0; }
   .us-count { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .us *, .us *::before, .us *::after, .us-ovl, .us-dlg { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .us *, .us *::before, .us *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 `;
 
-/* រូបអ្នកប្រើ — បើគ្មានរូប ឬ load មិនបាន បង្ហាញអក្សរដំបូងជំនួស */
-function UserAvatar({ user, onClick }) {
+function UserAvatar({ user, onClick, viewLabel }) {
   const src = user.image_url;
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -194,7 +173,7 @@ function UserAvatar({ user, onClick }) {
       type="button"
       className="us-avbtn"
       onClick={onClick}
-      aria-label={`មើល ${user.name}`}
+      aria-label={`${viewLabel} ${user.name}`}
     >
       {src && !failed ? (
         <img className="us-av" src={src} alt="" onError={() => setFailed(true)} />
@@ -205,7 +184,6 @@ function UserAvatar({ user, onClick }) {
   );
 }
 
-// 🟢 កំណត់ពណ៌ និងអត្ថបទ Badge របស់ Role ស្វ័យប្រវត្តិ
 function getRoleInfo(user) {
   const roleName = user.role?.name || user.role_name;
   const roleId = user.role_id ?? user.role?.id;
@@ -219,7 +197,6 @@ function getRoleInfo(user) {
     return { tone, label: `${roleName}${roleId ? ` (${roleId})` : ""}` };
   }
 
-  // Fallback បើមិនមាន Object role មកជាមួយ
   switch (Number(roleId)) {
     case 1:
       return { tone: "admin", label: "Admin (1)" };
@@ -233,6 +210,9 @@ function getRoleInfo(user) {
 const roleIdOf = (u) => u.role_id ?? u.role?.id;
 
 export default function UserPage() {
+  const { lang, t } = useTranslation();
+  const tus = t.users;
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -240,27 +220,13 @@ export default function UserPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_WIDTH);
 
-  // 🟢 State សម្រាប់បើក/បិទ Modal ទាំង ៤ (Create, View, Edit, Delete)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingUser, setViewingUser] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
-  const [deletingUser, setDeletingUser] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetchUsers();
   }, []);
-
-  // បិទ Dialog លុប ដោយចុច Esc
-  useEffect(() => {
-    if (!deletingUser) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape" && !isDeleting) setDeletingUser(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deletingUser, isDeleting]);
 
   const fetchUsers = async () => {
     try {
@@ -271,34 +237,35 @@ export default function UserPage() {
       setUsers(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error("Error fetching users:", error);
-      setErrorMsg(error.message || "បរាជ័យក្នុងការទាញយកទិន្នន័យអ្នកប្រើប្រាស់");
+      const msg = error.message || tus.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tus.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const openDelete = (u) => {
-    setDeleteError("");
-    setDeletingUser(u);
-  };
+  // មុខងារលុបអ្នកប្រើប្រាស់ដោយប្រើ Sweet Confirm & Toastr
+  const handleDelete = async (u) => {
+    const confirmed = await sweetConfirm({
+      title: tus.confirmDeleteTitle,
+      text: tus.confirmDeleteText(u.name),
+      confirmText: tus.confirmDeleteBtn,
+      cancelText: tus.cancelBtn,
+      type: "danger",
+    });
 
-  // មុខងារលុបអ្នកប្រើប្រាស់ (Delete User)
-  const handleConfirmDelete = async () => {
-    if (!deletingUser?.id) return;
-    try {
-      setIsDeleting(true);
-      setDeleteError("");
-      await deleteUser(deletingUser.id);
-      setDeletingUser(null);
-      fetchUsers();
-    } catch (err) {
-      setDeleteError(err?.message || "បរាជ័យក្នុងការលុបអ្នកប្រើប្រាស់នេះ");
-    } finally {
-      setIsDeleting(false);
+    if (confirmed) {
+      try {
+        await deleteUser(u.id);
+        setUsers((prev) => prev.filter((item) => item.id !== u.id));
+        toastr.success(tus.toastDeleteSuccessTitle, tus.toastDeleteSuccessMsg(u.name));
+      } catch (err) {
+        toastr.error(tus.toastErrorTitle, err?.message || tus.toastDeleteErrorMsg);
+      }
     }
   };
 
-  // ច្រោះអ្នកប្រើប្រាស់តាមការ Search និង Role
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const q = search.trim().toLowerCase();
@@ -315,7 +282,6 @@ export default function UserPage() {
     });
   }, [users, search, roleFilter]);
 
-  // ស្ថិតិសង្ខេបខាងលើ
   const stats = useMemo(() => {
     const total = users.length;
     const admins = users.filter((u) => {
@@ -327,23 +293,22 @@ export default function UserPage() {
     return { total, admins, staffs };
   }, [users]);
 
-  // ចំនួនអ្នកប្រើក្នុងតួនាទីនីមួយៗ (សម្រាប់ប៊ូតុងច្រោះ)
   const roleCounts = useMemo(() => {
     const countBy = (id) => users.filter((u) => String(roleIdOf(u)) === id).length;
     return { all: users.length, 1: countBy("1"), 2: countBy("2"), 3: countBy("3") };
   }, [users]);
 
   const statCards = [
-    { label: "អ្នកប្រើប្រាស់សរុប", value: stats.total, icon: Users, tone: "t1" },
-    { label: "គណនី Admin", value: stats.admins, icon: Shield, tone: "t2" },
-    { label: "គណនីបុគ្គលិក / Staff", value: stats.staffs, icon: Users, tone: "t3" },
+    { label: tus.statTotal, value: stats.total, icon: Users, tone: "t1" },
+    { label: tus.statAdmins, value: stats.admins, icon: Shield, tone: "t2" },
+    { label: tus.statStaffs, value: stats.staffs, icon: Users, tone: "t3" },
   ];
 
   const filters = [
-    { key: "all", label: "ទាំងអស់" },
-    { key: "1", label: "Admin" },
-    { key: "2", label: "Staff / Manager" },
-    { key: "3", label: "Cashier / Owner" },
+    { key: "all", label: tus.filterAll },
+    { key: "1", label: tus.filterAdmin },
+    { key: "2", label: tus.filterStaff },
+    { key: "3", label: tus.filterCashier },
   ];
 
   const hasSearch = search.trim() !== "";
@@ -356,16 +321,15 @@ export default function UserPage() {
   return (
     <>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="us">
-        {/* 🟢 1. Sidebar */}
         <Sidebar onCollapseChange={(_, width) => setSidebarWidth(width)} />
 
-        {/* 🟢 2. Main Content */}
         <div className="us-main" style={{ marginLeft: `${sidebarWidth}px` }}>
           <Appbar />
 
           <div className="us-body">
-            {/* 🟢 Header & Action Buttons */}
+            {/* Header & Action Buttons */}
             <div className="us-head us-in" style={{ "--d": 0 }}>
               <div className="us-titlewrap">
                 <div className="us-titleico">
@@ -373,27 +337,26 @@ export default function UserPage() {
                 </div>
                 <div>
                   <h2 className="us-title">
-                    បញ្ជីអ្នកប្រើប្រាស់ប្រព័ន្ធ<small>System Users</small>
+                    {tus.heading}
+                    {lang === "km" && <small>System Users</small>}
                   </h2>
-                  <p className="us-sub">
-                    គ្រប់គ្រងគណនីបុគ្គលិក អ្នកគ្រប់គ្រង និងកំណត់សិទ្ធិប្រើប្រាស់ប្រព័ន្ធ POS
-                  </p>
+                  <p className="us-sub">{tus.subHeading}</p>
                 </div>
               </div>
 
               <div className="us-actions">
                 <button className="us-btn ghost" onClick={fetchUsers} disabled={loading}>
                   <RefreshCw size={16} className={loading ? "us-spin" : ""} />
-                  <span>ផ្ទុកឡើងវិញ</span>
+                  <span>{tus.refresh}</span>
                 </button>
                 <button className="us-btn primary" onClick={() => setIsCreateOpen(true)}>
                   <Plus size={17} strokeWidth={2.4} />
-                  <span>បន្ថែមអ្នកប្រើប្រាស់ថ្មី</span>
+                  <span>{tus.addNew}</span>
                 </button>
               </div>
             </div>
 
-            {/* 🟢 Summary Cards */}
+            {/* Summary Cards */}
             <div className="us-stats">
               {statCards.map((c, i) => {
                 const Icon = c.icon;
@@ -406,7 +369,7 @@ export default function UserPage() {
                       <div className="us-statlabel">{c.label}</div>
                       <div className="us-statnum">
                         {c.value}
-                        <small>នាក់</small>
+                        <small>{tus.personSuffix}</small>
                       </div>
                     </div>
                   </div>
@@ -418,36 +381,36 @@ export default function UserPage() {
               <div className="us-error" role="alert">
                 <span>{errorMsg}</span>
                 <button type="button" onClick={fetchUsers}>
-                  ព្យាយាមម្តងទៀត
+                  {tus.tryAgain}
                 </button>
               </div>
             )}
 
-            {/* 🟢 Search & Role Filter + Users Table */}
+            {/* Search & Role Filter + Users Table */}
             <div className="us-panel us-in" style={{ "--d": 4 }}>
               <div className="us-toolbar">
                 <div className="us-search">
                   <Search size={17} />
                   <input
                     type="text"
-                    placeholder="ស្វែងរកតាមឈ្មោះ, អ៊ីមែល ឬលេខទូរស័ព្ទ..."
+                    placeholder={tus.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="ស្វែងរកអ្នកប្រើប្រាស់"
+                    aria-label={tus.searchPlaceholder}
                   />
                   {hasSearch && (
                     <button
                       type="button"
                       className="us-clear"
                       onClick={() => setSearch("")}
-                      aria-label="លុបការស្វែងរក"
+                      aria-label={tus.clearSearch}
                     >
                       <X size={16} />
                     </button>
                   )}
                 </div>
 
-                <div className="us-seg" role="group" aria-label="ច្រោះតាមតួនាទី">
+                <div className="us-seg" role="group" aria-label="Filter by role">
                   {filters.map((f) => (
                     <button
                       key={f.key}
@@ -464,13 +427,13 @@ export default function UserPage() {
 
                 {!loading && (
                   <div className="us-count">
-                    បង្ហាញ <b>{filteredUsers.length}</b> / {users.length} នាក់
+                    {tus.showing} <b>{filteredUsers.length}</b> / {users.length} {tus.personSuffix}
                   </div>
                 )}
               </div>
 
               {loading ? (
-                <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+                <div aria-busy="true">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div className="us-skel-row" key={i}>
                       <div className="us-skel" style={{ width: 24 }} />
@@ -488,22 +451,20 @@ export default function UserPage() {
                     <Users size={32} strokeWidth={1.7} />
                   </div>
                   <h3 className="us-emptytitle">
-                    {hasFilter ? "រកមិនឃើញទិន្នន័យអ្នកប្រើប្រាស់ទេ" : "មិនទាន់មានអ្នកប្រើប្រាស់ទេ"}
+                    {hasFilter ? tus.emptyFilter : tus.emptyNoFilter}
                   </h3>
                   <p className="us-emptytext">
-                    {hasFilter
-                      ? "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង ឬប្តូរតួនាទី"
-                      : "ចាប់ផ្តើមបង្កើតគណនីអ្នកប្រើប្រាស់ដំបូង"}
+                    {hasFilter ? tus.emptySubFilter : tus.emptySubNoFilter}
                   </p>
                   {hasFilter ? (
                     <button className="us-btn ghost" onClick={clearFilters}>
                       <X size={16} />
-                      <span>សម្អាតការច្រោះ</span>
+                      <span>{tus.clearFilters}</span>
                     </button>
                   ) : (
                     <button className="us-btn primary" onClick={() => setIsCreateOpen(true)}>
                       <Plus size={17} strokeWidth={2.4} />
-                      <span>បន្ថែមអ្នកប្រើប្រាស់ថ្មី</span>
+                      <span>{tus.addNew}</span>
                     </button>
                   )}
                 </div>
@@ -513,11 +474,11 @@ export default function UserPage() {
                     <thead>
                       <tr>
                         <th style={{ width: 56 }}>#</th>
-                        <th>អ្នកប្រើប្រាស់</th>
-                        <th>អ៊ីមែល</th>
-                        <th>លេខទូរស័ព្ទ</th>
-                        <th style={{ textAlign: "center" }}>តួនាទី</th>
-                        <th style={{ textAlign: "center" }}>សកម្មភាព</th>
+                        <th>{tus.colUser}</th>
+                        <th>{tus.colEmail}</th>
+                        <th>{tus.colPhone}</th>
+                        <th style={{ textAlign: "center" }}>{tus.colRole}</th>
+                        <th style={{ textAlign: "center" }}>{tus.colActions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -531,7 +492,11 @@ export default function UserPage() {
                             {/* Avatar + Name */}
                             <td>
                               <div className="us-user">
-                                <UserAvatar user={u} onClick={() => setViewingUser(u)} />
+                                <UserAvatar
+                                  user={u}
+                                  onClick={() => setViewingUser(u)}
+                                  viewLabel={tus.viewTitle}
+                                />
                                 <div>
                                   <button
                                     type="button"
@@ -574,15 +539,15 @@ export default function UserPage() {
                               <span className={`us-role ${role.tone}`}>{role.label}</span>
                             </td>
 
-                            {/* 🟢 Actions (View, Edit, Delete) */}
+                            {/* Actions (View, Edit, Delete) */}
                             <td style={{ textAlign: "center" }}>
                               <div className="us-acts">
                                 <button
                                   type="button"
                                   className="us-act"
                                   onClick={() => setViewingUser(u)}
-                                  title="មើល"
-                                  aria-label={`មើល ${u.name}`}
+                                  title={tus.viewTitle}
+                                  aria-label={`${tus.viewTitle} ${u.name}`}
                                 >
                                   <Eye size={17} />
                                 </button>
@@ -590,17 +555,17 @@ export default function UserPage() {
                                   type="button"
                                   className="us-act"
                                   onClick={() => setEditingUser(u)}
-                                  title="កែប្រែ"
-                                  aria-label={`កែប្រែ ${u.name}`}
+                                  title={tus.editTitle}
+                                  aria-label={`${tus.editTitle} ${u.name}`}
                                 >
                                   <Pencil size={17} />
                                 </button>
                                 <button
                                   type="button"
                                   className="us-act danger"
-                                  onClick={() => openDelete(u)}
-                                  title="លុប"
-                                  aria-label={`លុប ${u.name}`}
+                                  onClick={() => handleDelete(u)}
+                                  title={tus.deleteTitle}
+                                  aria-label={`${tus.deleteTitle} ${u.name}`}
                                 >
                                   <Trash2 size={17} />
                                 </button>
@@ -617,83 +582,35 @@ export default function UserPage() {
           </div>
         </div>
 
-        {/* 🟢 3. Modal បង្កើតអ្នកប្រើប្រាស់ថ្មី (Create User) */}
+        {/* Modal បង្កើតអ្នកប្រើប្រាស់ថ្មី */}
         <CreateUserModal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          onSuccess={fetchUsers}
+          onSuccess={() => {
+            fetchUsers();
+            toastr.success(tus.toastCreateSuccessTitle, tus.toastCreateSuccessMsg);
+          }}
         />
 
-        {/* 🟢 4. Modal មើលព័ត៌មានលម្អិតអ្នកប្រើប្រាស់ (View User) */}
+        {/* Modal មើលព័ត៌មានលម្អិតអ្នកប្រើប្រាស់ */}
         <ViewUserModal
           isOpen={Boolean(viewingUser)}
           user={viewingUser}
           onClose={() => setViewingUser(null)}
           onEdit={(usr) => setEditingUser(usr)}
-          onDelete={openDelete}
+          onDelete={handleDelete}
         />
 
-        {/* 🟢 5. Modal កែប្រែព័ត៌មានអ្នកប្រើប្រាស់ (Update User) */}
+        {/* Modal កែប្រែព័ត៌មានអ្នកប្រើប្រាស់ */}
         <EditUserModal
           isOpen={Boolean(editingUser)}
           user={editingUser}
           onClose={() => setEditingUser(null)}
-          onSuccess={fetchUsers}
+          onSuccess={() => {
+            fetchUsers();
+            toastr.success(tus.toastUpdateSuccessTitle, tus.toastUpdateSuccessMsg);
+          }}
         />
-
-        {/* 🟢 6. Modal បញ្ជាក់ការលុបអ្នកប្រើប្រាស់ (Delete Confirmation Modal) */}
-        {deletingUser && (
-          <div className="us-ovl" onClick={() => !isDeleting && setDeletingUser(null)}>
-            <div
-              className="us-dlg"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="us-dlg-title"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="us-dlgico">
-                <AlertTriangle size={28} />
-              </div>
-
-              <h3 id="us-dlg-title">បញ្ជាក់ការលុបអ្នកប្រើប្រាស់</h3>
-              <p>
-                តើបងពិតជាចង់លុបអ្នកប្រើប្រាស់ <strong>"{deletingUser.name}"</strong> នេះមែនទេ?
-              </p>
-
-              {deleteError && (
-                <div className="us-derr" role="alert">
-                  {deleteError}
-                </div>
-              )}
-
-              <div className="us-dlgbtns">
-                <button
-                  type="button"
-                  className="us-btn ghost"
-                  disabled={isDeleting}
-                  onClick={() => setDeletingUser(null)}
-                >
-                  បោះបង់
-                </button>
-                <button
-                  type="button"
-                  className="us-btn danger"
-                  disabled={isDeleting}
-                  onClick={handleConfirmDelete}
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 size={17} className="us-spin" />
-                      កំពុងលុប...
-                    </>
-                  ) : (
-                    "យល់ព្រមលុប"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

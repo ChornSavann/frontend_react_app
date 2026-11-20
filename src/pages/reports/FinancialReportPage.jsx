@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import Layout from "../../components/Layout";
 import * as reportService from "../../services/reportService";
+import ToastrContainer, { toastr } from "../../components/Toastr";
+import { useTranslation } from "../../utils/translations";
 
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap');
@@ -343,6 +345,9 @@ function CategoryBreakdownSection({ items, total, colors, emptyText, centerLabel
 }
 
 export default function FinancialReportPage() {
+  const { lang, t } = useTranslation();
+  const tfr = t.financialReports;
+
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
   const [reportData, setReportData] = useState(null);
@@ -357,7 +362,7 @@ export default function FinancialReportPage() {
   }, [year]);
 
   const fetchFinancial = async () => {
-    const id = ++reqId.current; // ការពារ response ចាស់ជាន់លើ response ថ្មី
+    const id = ++reqId.current;
     try {
       setLoading(true);
       setErrorMsg("");
@@ -369,22 +374,21 @@ export default function FinancialReportPage() {
     } catch (err) {
       if (id !== reqId.current) return;
       console.error("Error fetching financial report:", err);
-      setErrorMsg(err?.message || "បរាជ័យក្នុងការទាញយករបាយការណ៍ហិរញ្ញវត្ថុ");
+      const msg = err?.message || tfr.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tfr.toastErrorTitle, msg);
     } finally {
       if (id === reqId.current) setLoading(false);
     }
   };
 
-  // ឆ្នាំ៖ ឆ្នាំបច្ចុប្បន្ន រហូតដល់ ៥ ឆ្នាំមុន (ហើយរួមបញ្ចូលឆ្នាំដែលបានជ្រើស)
   const years = Array.from({ length: 6 }, (_, i) => thisYear - i);
   if (!years.includes(Number(year))) years.push(Number(year));
 
-  // 1. បូកសរុបទិន្នន័យពី Profit & Loss Breakdowns
   const incomeList = reportData?.income_breakdown || [];
   const cogsList = reportData?.expense_by_category || [];
   const expList = reportData?.expense_breakdown || [];
 
-  // Aggregate by Category Name (សម្រាប់ Donut & Progress Charts)
   const groupByName = (arr, nameGetter) => {
     const map = {};
     arr.forEach((item) => {
@@ -400,7 +404,6 @@ export default function FinancialReportPage() {
   const cogsCategories = groupByName(cogsList, (d) => d.category_name);
   const operatingCategories = groupByName(expList, (d) => d.expense_type?.name || d.expense_type_name);
 
-  // 2. គណនាទិន្នន័យប្រចាំខែ (Jan = 1 ... Dec = 12) សម្រាប់ក្រាហ្វិក 12 ខែ
   const monthlySeries = MONTH_NAMES.map((mName, idx) => {
     const mNum = idx + 1;
     const mInc = incomeList.filter((d) => num(d.month) === mNum).reduce((s, d) => s + num(d.total_amount), 0);
@@ -409,7 +412,6 @@ export default function FinancialReportPage() {
     return { month: mName, income: mInc, cogs: mCogs, expense: mExp, net: mInc - mCogs - mExp };
   });
 
-  // ប្រសិនបើទិន្នន័យមិនមាន month ដាក់សរុបចូលខែទី 1 ដើម្បីឱ្យក្រាហ្វិកបង្ហាញ
   const hasMonthlyTag =
     incomeList.some((d) => d.month) || cogsList.some((d) => d.month) || expList.some((d) => d.month);
 
@@ -433,7 +435,6 @@ export default function FinancialReportPage() {
   const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
   const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
 
-  // ភាគរយសម្រាប់ Revenue Split Bar
   const totalOutflowAndProfit = Math.max(revenue, totalExpense, 1);
   const cogsPct = Math.min((cogs / totalOutflowAndProfit) * 100, 100);
   const genExpPct = Math.min((generalExp / totalOutflowAndProfit) * 100, 100);
@@ -442,6 +443,7 @@ export default function FinancialReportPage() {
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="fr">
         {/* Top Header & Year Filter */}
         <div className="fr-top">
@@ -451,20 +453,21 @@ export default function FinancialReportPage() {
             </div>
             <div>
               <h2 className="fr-title">
-                របាយការណ៍ហិរញ្ញវត្ថុ<small>Financial Analytics</small>
+                {tfr.heading}
+                {lang === "km" && <small>Financial Analytics</small>}
               </h2>
-              <p className="fr-sub">ក្រាហ្វិកវិភាគចំណូល ថ្លៃដើមទំនិញ ចំណាយប្រតិបត្តិការ និងប្រាក់ចំណេញពី Profit &amp; Loss</p>
+              <p className="fr-sub">{tfr.subHeading}</p>
             </div>
           </div>
 
           <div className="fr-actions">
             {updatedAt && !loading && (
               <span className="fr-stamp">
-                Updated {updatedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                {tfr.updatedPrefix} {updatedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
             <div className="fr-field">
-              <label htmlFor="fr-year">ឆ្នាំ</label>
+              <label htmlFor="fr-year">{tfr.yearLabel}</label>
               <select id="fr-year" className="fr-input" value={year} onChange={(e) => setYear(Number(e.target.value))}>
                 {years.map((y) => (
                   <option key={y} value={y}>
@@ -475,7 +478,7 @@ export default function FinancialReportPage() {
             </div>
             <button className="fr-btn primary" onClick={fetchFinancial} disabled={loading}>
               <RefreshCw size={16} className={loading ? "fr-spin" : ""} />
-              <span>Refresh</span>
+              <span>{tfr.refresh}</span>
             </button>
           </div>
         </div>
@@ -483,7 +486,7 @@ export default function FinancialReportPage() {
         {errorMsg && (
           <div className="fr-err" role="alert">
             <span>{errorMsg}</span>
-            <button onClick={fetchFinancial}>ព្យាយាមម្តងទៀត</button>
+            <button onClick={fetchFinancial}>{tfr.tryAgain}</button>
           </div>
         )}
 
@@ -513,17 +516,17 @@ export default function FinancialReportPage() {
           <>
             {/* 1. 4 Executive KPI Cards */}
             <div className="fr-tiles">
-              <Tile label="ចំណូលសរុប (Total Revenue)" target={revenue} icon={TrendingUp} tone="t-green" valueColor="#4d7c0f" delay={0} />
-              <Tile label="ថ្លៃដើមទិញស្តុក (Total COGS)" target={cogs} icon={Package} tone="t-amber" valueColor="#9a6a0a" delay={60} />
-              <Tile label="ចំណាយប្រតិបត្តិការ (Operating Exp)" target={generalExp} icon={TrendingDown} tone="t-red" valueColor="#b9382d" delay={120} />
+              <Tile label={tfr.tileRevenue} target={revenue} icon={TrendingUp} tone="t-green" valueColor="#4d7c0f" delay={0} />
+              <Tile label={tfr.tileCogs} target={cogs} icon={Package} tone="t-amber" valueColor="#9a6a0a" delay={60} />
+              <Tile label={tfr.tileExp} target={generalExp} icon={TrendingDown} tone="t-red" valueColor="#b9382d" delay={120} />
               <Tile
-                label="ប្រាក់ចំណេញសុទ្ធ (Net Profit)"
+                label={tfr.tileNetProfit}
                 target={netProfit}
                 icon={DollarSign}
                 tone="t-dark"
                 hero
                 delay={180}
-                hint={hasData ? (profitable ? "ចំណេញ (Profitable)" : "ខាតបង់ (Net Loss)") : undefined}
+                hint={hasData ? (profitable ? tfr.badgeProfitable : tfr.badgeLoss) : undefined}
               />
             </div>
 
@@ -532,8 +535,8 @@ export default function FinancialReportPage() {
                 <div className="fr-emptyico">
                   <Wallet size={32} strokeWidth={1.7} />
                 </div>
-                <b>មិនទាន់មានទិន្នន័យហិរញ្ញវត្ថុសម្រាប់ឆ្នាំ {year} ទេ</b>
-                ក្រាហ្វិកចំណូល និងចំណាយនឹងបង្ហាញនៅទីនេះ នៅពេលមានប្រតិបត្តិការលក់ និងទិញចូលស្តុក
+                <b>{tfr.emptyTitle(year)}</b>
+                {tfr.emptySub}
               </div>
             ) : (
               <>
@@ -542,9 +545,9 @@ export default function FinancialReportPage() {
                   <section className="fr-card" style={{ "--d": "200ms" }}>
                     <div className="fr-ctitle">
                       <span className="fr-ctitle-left">
-                        <Activity size={18} /> ចំណូល ទល់នឹង ចំណាយប្រចាំខែ (Jan - Dec {year})
+                        <Activity size={18} /> {tfr.chartTitle(year)}
                       </span>
-                      <span className="fr-badge">Monthly P&amp;L Trend</span>
+                      <span className="fr-badge">{tfr.chartBadge}</span>
                     </div>
 
                     <div className="fr-barchart-wrap">
@@ -560,9 +563,9 @@ export default function FinancialReportPage() {
                                 <strong>
                                   {m.month} {year}
                                 </strong>
-                                <div style={{ color: "#7fd1c2" }}>• ចំណូល: {money(m.income)}</div>
-                                <div style={{ color: "#f0c674" }}>• ទិញស្តុក (COGS): {money(m.cogs)}</div>
-                                <div style={{ color: "#f0a8a0" }}>• ចំណាយទូទៅ: {money(m.expense)}</div>
+                                <div style={{ color: "#7fd1c2" }}>{tfr.tooltipIncome} {money(m.income)}</div>
+                                <div style={{ color: "#f0c674" }}>{tfr.tooltipCogs} {money(m.cogs)}</div>
+                                <div style={{ color: "#f0a8a0" }}>{tfr.tooltipExpense} {money(m.expense)}</div>
                                 <div
                                   style={{
                                     borderTop: "1px solid #2f5a55",
@@ -572,7 +575,7 @@ export default function FinancialReportPage() {
                                     fontWeight: 700,
                                   }}
                                 >
-                                  Net: {m.net >= 0 ? "+" : "-"}
+                                  {tfr.tooltipNet} {m.net >= 0 ? "+" : "-"}
                                   {money(m.net)}
                                 </div>
                               </div>
@@ -589,19 +592,19 @@ export default function FinancialReportPage() {
 
                       {monthFallback && (
                         <div className="fr-note">
-                          ទិន្នន័យពី API មិនមានព័ត៌មានខែ ដូច្នេះចំនួនសរុបទាំងឆ្នាំត្រូវបង្ហាញក្នុងខែ Jan តែមួយ។
+                          {tfr.monthFallbackNote}
                         </div>
                       )}
 
                       <div className="fr-legend">
                         <span>
-                          <i style={{ background: "#1f8a7d" }} /> ចំណូលលក់: <b>{money(revenue)}</b>
+                          <i style={{ background: "#1f8a7d" }} /> {tfr.legendRevenue}: <b>{money(revenue)}</b>
                         </span>
                         <span>
-                          <i style={{ background: "#d9961b" }} /> ថ្លៃដើមទិញស្តុក (COGS): <b>{money(cogs)}</b>
+                          <i style={{ background: "#d9961b" }} /> {tfr.legendCogs}: <b>{money(cogs)}</b>
                         </span>
                         <span>
-                          <i style={{ background: "#d9564a" }} /> ចំណាយទូទៅ: <b>{money(generalExp)}</b>
+                          <i style={{ background: "#d9564a" }} /> {tfr.legendExpense}: <b>{money(generalExp)}</b>
                         </span>
                       </div>
                     </div>
@@ -611,7 +614,7 @@ export default function FinancialReportPage() {
                   <section className="fr-card" style={{ "--d": "260ms" }}>
                     <div className="fr-ctitle">
                       <span className="fr-ctitle-left">
-                        <Percent size={18} /> អត្រាប្រាក់ចំណេញ និងសមាមាត្រ
+                        <Percent size={18} /> {tfr.gaugeTitle}
                       </span>
                     </div>
 
@@ -623,24 +626,24 @@ export default function FinancialReportPage() {
                             {grossProfit >= 0 ? "+" : "-"}
                             {money(grossProfit)} ({grossMargin.toFixed(1)}%)
                           </b>
-                          <span>ប្រាក់ចំណេញដុល (Gross Profit)</span>
+                          <span>{tfr.grossProfitLabel}</span>
                         </li>
                         <li>
                           <b className={profitable ? "pos" : "neg"}>
                             {profitable ? "+" : "-"}
                             {money(netProfit)}
                           </b>
-                          <span>{profitable ? "ប្រាក់ចំណេញសុទ្ធ (Net Profit)" : "ការខាតបង់សុទ្ធ (Net Loss)"}</span>
+                          <span>{profitable ? tfr.netProfitLabel : tfr.netLossLabel}</span>
                         </li>
                         <li>
                           <b>{money(totalExpense)}</b>
-                          <span>ចំណាយសរុបរួម (COGS + Operating)</span>
+                          <span>{tfr.totalExpenseLabel}</span>
                         </li>
                       </ul>
                     </div>
 
                     <div className="fr-split-box">
-                      <div className="fr-split-title">សមាមាត្រធៀបរវាងថ្លៃដើម ចំណាយ និងប្រាក់ចំណេញ</div>
+                      <div className="fr-split-title">{tfr.splitTitle}</div>
                       <div className="fr-stack" role="img" aria-label="P&L Split">
                         {cogsPct > 0 && (
                           <i className="fr-seg-bar" style={{ width: `${cogsPct}%`, background: "#d9961b" }} title={`COGS: ${cogsPct.toFixed(1)}%`} />
@@ -654,13 +657,13 @@ export default function FinancialReportPage() {
                       </div>
                       <div className="fr-legend" style={{ marginTop: 10 }}>
                         <span>
-                          <i style={{ background: "#d9961b" }} /> COGS <b>{cogsPct.toFixed(0)}%</b>
+                          <i style={{ background: "#d9961b" }} /> {tfr.splitCogs} <b>{cogsPct.toFixed(0)}%</b>
                         </span>
                         <span>
-                          <i style={{ background: "#d9564a" }} /> ចំណាយទូទៅ <b>{genExpPct.toFixed(0)}%</b>
+                          <i style={{ background: "#d9564a" }} /> {tfr.splitExp} <b>{genExpPct.toFixed(0)}%</b>
                         </span>
                         <span>
-                          <i style={{ background: "#6ba51f" }} /> ចំណេញ <b>{profitPct.toFixed(0)}%</b>
+                          <i style={{ background: "#6ba51f" }} /> {tfr.splitProfit} <b>{profitPct.toFixed(0)}%</b>
                         </span>
                       </div>
                     </div>
@@ -672,48 +675,48 @@ export default function FinancialReportPage() {
                   <section className="fr-card" style={{ "--d": "320ms" }}>
                     <div className="fr-ctitle">
                       <span className="fr-ctitle-left">
-                        <PieChart size={18} /> ចំណូលតាមប្រភេទទំនិញ
+                        <PieChart size={18} /> {tfr.catIncomeTitle}
                       </span>
-                      <span className="fr-badge">{incomeCategories.length} ប្រភេទ</span>
+                      <span className="fr-badge">{incomeCategories.length} {tfr.categoriesSuffix}</span>
                     </div>
                     <CategoryBreakdownSection
                       items={incomeCategories}
                       total={revenue}
                       colors={PALETTE_INC}
-                      centerLabel="Total Sales"
-                      emptyText="មិនមានទិន្នន័យចំណូលតាមប្រភេទទេ"
+                      centerLabel={tfr.centerSales}
+                      emptyText={tfr.emptyIncome}
                     />
                   </section>
 
                   <section className="fr-card" style={{ "--d": "380ms" }}>
                     <div className="fr-ctitle">
                       <span className="fr-ctitle-left">
-                        <Layers size={18} /> ថ្លៃដើមទិញស្តុកតាមប្រភេទ (COGS)
+                        <Layers size={18} /> {tfr.catCogsTitle}
                       </span>
-                      <span className="fr-badge">{cogsCategories.length} ប្រភេទ</span>
+                      <span className="fr-badge">{cogsCategories.length} {tfr.categoriesSuffix}</span>
                     </div>
                     <CategoryBreakdownSection
                       items={cogsCategories}
                       total={cogs}
                       colors={PALETTE_COGS}
-                      centerLabel="Total COGS"
-                      emptyText="មិនមានទិន្នន័យទិញស្តុកទេ"
+                      centerLabel={tfr.centerCogs}
+                      emptyText={tfr.emptyCogs}
                     />
                   </section>
 
                   <section className="fr-card" style={{ "--d": "440ms" }}>
                     <div className="fr-ctitle">
                       <span className="fr-ctitle-left">
-                        <Wallet size={18} /> ចំណាយប្រតិបត្តិការទូទៅ
+                        <Wallet size={18} /> {tfr.catExpTitle}
                       </span>
-                      <span className="fr-badge">{operatingCategories.length} ប្រភេទ</span>
+                      <span className="fr-badge">{operatingCategories.length} {tfr.categoriesSuffix}</span>
                     </div>
                     <CategoryBreakdownSection
                       items={operatingCategories}
                       total={generalExp}
                       colors={PALETTE_EXP}
-                      centerLabel="Operating Exp"
-                      emptyText="មិនមានទិន្នន័យចំណាយទូទៅទេ"
+                      centerLabel={tfr.centerExp}
+                      emptyText={tfr.emptyExp}
                     />
                   </section>
                 </div>

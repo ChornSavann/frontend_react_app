@@ -1,4 +1,4 @@
-
+// src/pages/SupplierPage.jsx
 import React, { useEffect, useState, useMemo } from "react";
 import Sidebar, { SIDEBAR_WIDTH } from "../components/Sidebar";
 import Appbar from "../components/Appbar";
@@ -6,6 +6,8 @@ import { listSuppliers, deleteSupplier } from "../services/supplierService";
 import CreateSupplierModal from "./suppliers/CreateSupplierModal";
 import EditSupplierModal from "./suppliers/EditSupplierModal";
 import ViewSupplierModal from "./suppliers/ViewSupplierModal";
+import ToastrContainer, { toastr, sweetConfirm } from "../components/Toastr";
+import { useTranslation } from "../utils/translations";
 import {
   Search,
   Building2,
@@ -17,8 +19,6 @@ import {
   Eye,
   Trash2,
   X,
-  Loader2,
-  AlertTriangle,
   Phone,
   Mail,
   Globe,
@@ -163,36 +163,15 @@ const css = `
 .sup .sup-emptytitle { margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--ink); }
 .sup-emptytext { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
 
-/* ---------- delete dialog ---------- */
-.sup-ovl { position: fixed; inset: 0; z-index: 2100; display: flex; justify-content: center; align-items: center; padding: 20px;
-  background: rgba(15,55,51,.45); backdrop-filter: blur(4px); animation: sup-ovl .2s ease both;
-  font-family: 'Plus Jakarta Sans','Noto Sans Khmer',-apple-system,sans-serif; }
-@keyframes sup-ovl { from { opacity: 0; } to { opacity: 1; } }
-.sup-dlg { width: 100%; max-width: 430px; padding: 28px 26px 24px; text-align: center; background: #fff; border-radius: 22px; color: var(--ink); line-height: 1.6;
-  box-shadow: 0 30px 70px -20px rgba(15,55,51,.5); animation: sup-pop .32s cubic-bezier(.2,1.2,.4,1) both; }
-@keyframes sup-pop { from { opacity: 0; transform: translateY(14px) scale(.95); } to { opacity: 1; transform: none; } }
-.sup-dlgico { position: relative; width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; background: #fdeceb; color: #c8372d; }
-.sup-dlgico::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(200,55,45,.25); animation: sup-ring 1.8s ease-out infinite; }
-@keyframes sup-ring { from { opacity: 1; transform: scale(.9); } to { opacity: 0; transform: scale(1.25); } }
-.sup .sup-dlg h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
-.sup-dlg p { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.7; }
-.sup-dlg p strong { color: var(--ink); }
-.sup-derr { margin: -8px 0 18px; padding: 10px 12px; border-radius: 12px; text-align: left; font-size: 13px; background: #fff4f2; color: #b42318; border: 1px solid #fcd5cf; }
-.sup-dlgbtns { display: flex; gap: 10px; }
-.sup-dlgbtns .sup-btn { flex: 1; justify-content: center; }
-.sup-btn.danger { color: #fff; background: linear-gradient(135deg, #de4b3f, #b9291f); box-shadow: 0 10px 20px -8px rgba(185,41,31,.55); }
-.sup-btn.danger:hover:not(:disabled) { transform: translateY(-1px); }
-
 @media (max-width: 720px) {
   .sup-body { padding: 20px 16px 36px; }
   .sup .sup-title small { display: block; margin: 0; }
   .sup-count { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sup *, .sup *::before, .sup *::after, .sup-ovl, .sup-dlg { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .sup *, .sup *::before, .sup *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 `;
-
 
 function safeUrl(raw) {
   if (!raw) return null;
@@ -203,15 +182,18 @@ function safeUrl(raw) {
   return `https://${t}`;
 }
 
-function hostOf(url) {
+function hostOf(url, fallback) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return "គេហទំព័រ";
+    return fallback;
   }
 }
 
 export default function SupplierPage() {
+  const { lang, t } = useTranslation();
+  const tsup = t.suppliers;
+
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -219,27 +201,13 @@ export default function SupplierPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_WIDTH);
 
-  
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingSupplier, setViewingSupplier] = useState(null);
   const [editingSupplier, setEditingSupplier] = useState(null);
-  const [deletingSupplier, setDeletingSupplier] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetchSuppliers();
   }, []);
-
-  // បិទ Dialog លុប ដោយចុច Esc
-  useEffect(() => {
-    if (!deletingSupplier) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape" && !isDeleting) setDeletingSupplier(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deletingSupplier, isDeleting]);
 
   const fetchSuppliers = async () => {
     try {
@@ -251,34 +219,36 @@ export default function SupplierPage() {
       setSuppliers(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error("Error fetching suppliers:", error);
-      setErrorMsg(error.message || "បរាជ័យក្នុងការទាញយកទិន្នន័យអ្នកផ្គត់ផ្គង់");
+      const msg = error.message || tsup.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tsup.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const openDelete = (s) => {
-    setDeleteError("");
-    setDeletingSupplier(s);
-  };
+  // មុខងារលុបអ្នកផ្គត់ផ្គង់ដោយប្រើ Sweet Confirm & Toastr
+  const handleDelete = async (sup) => {
+    const label = sup.company || sup.name;
+    const confirmed = await sweetConfirm({
+      title: tsup.confirmDeleteTitle,
+      text: tsup.confirmDeleteText(label),
+      confirmText: tsup.confirmDeleteBtn,
+      cancelText: tsup.cancelBtn,
+      type: "danger",
+    });
 
-  // មុខងារលុបអ្នកផ្គត់ផ្គង់ (Delete Supplier)
-  const handleConfirmDelete = async () => {
-    if (!deletingSupplier?.id) return;
-    try {
-      setIsDeleting(true);
-      setDeleteError("");
-      await deleteSupplier(deletingSupplier.id);
-      setDeletingSupplier(null);
-      fetchSuppliers();
-    } catch (err) {
-      setDeleteError(err?.message || "បរាជ័យក្នុងការលុបអ្នកផ្គត់ផ្គង់នេះ");
-    } finally {
-      setIsDeleting(false);
+    if (confirmed) {
+      try {
+        await deleteSupplier(sup.id);
+        setSuppliers((prev) => prev.filter((item) => item.id !== sup.id));
+        toastr.success(tsup.toastDeleteSuccessTitle, tsup.toastDeleteSuccessMsg(label));
+      } catch (err) {
+        toastr.error(tsup.toastErrorTitle, err?.message || tsup.toastDeleteErrorMsg);
+      }
     }
   };
 
-  // ច្រោះអ្នកផ្គត់ផ្គង់តាមការ Search និង Status
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((s) => {
       const q = search.trim().toLowerCase();
@@ -301,7 +271,6 @@ export default function SupplierPage() {
     });
   }, [suppliers, search, statusFilter]);
 
-  // គណនាស្ថិតិសង្ខេបខាងលើ
   const stats = useMemo(() => {
     const total = suppliers.length;
     const active = suppliers.filter(
@@ -313,19 +282,19 @@ export default function SupplierPage() {
 
   const statCards = [
     {
-      label: "អ្នកផ្គត់ផ្គង់សរុប",
+      label: tsup.statTotal,
       value: stats.total,
       icon: Building2,
       tone: "t1",
     },
     {
-      label: "កំពុងដំណើរការ (Active)",
+      label: tsup.statActive,
       value: stats.active,
       icon: CheckCircle2,
       tone: "t2",
     },
     {
-      label: "ផ្អាកដំណើរការ (Inactive)",
+      label: tsup.statInactive,
       value: stats.inactive,
       icon: XCircle,
       tone: "t3",
@@ -333,9 +302,9 @@ export default function SupplierPage() {
   ];
 
   const filters = [
-    { key: "all", label: "ទាំងអស់", n: stats.total },
-    { key: "active", label: "កំពុងដំណើរការ", n: stats.active },
-    { key: "inactive", label: "ផ្អាក", n: stats.inactive },
+    { key: "all", label: tsup.filterAll, n: stats.total },
+    { key: "active", label: tsup.filterActive, n: stats.active },
+    { key: "inactive", label: tsup.filterInactive, n: stats.inactive },
   ];
 
   const hasSearch = search.trim() !== "";
@@ -348,16 +317,15 @@ export default function SupplierPage() {
   return (
     <>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="sup">
-        {/* 🟢 1. Sidebar */}
         <Sidebar onCollapseChange={(_, width) => setSidebarWidth(width)} />
 
-        {/* 🟢 2. Main Content */}
         <div className="sup-main" style={{ marginLeft: `${sidebarWidth}px` }}>
           <Appbar />
 
           <div className="sup-body">
-            {/* 🟢 Header & Action Buttons */}
+            {/* Header & Action Buttons */}
             <div className="sup-head sup-in" style={{ "--d": 0 }}>
               <div className="sup-titlewrap">
                 <div className="sup-titleico">
@@ -365,12 +333,10 @@ export default function SupplierPage() {
                 </div>
                 <div>
                   <h2 className="sup-title">
-                    បញ្ជីអ្នកផ្គត់ផ្គង់ទំនិញ<small>Suppliers</small>
+                    {tsup.heading}
+                    {lang === "km" && <small>Suppliers</small>}
                   </h2>
-                  <p className="sup-sub">
-                    គ្រប់គ្រងក្រុមហ៊ុនផ្គត់ផ្គង់ អ្នកទំនាក់ទំនង លេខទូរស័ព្ទ
-                    និងអាសយដ្ឋានសម្រាប់ទិញទំនិញចូលស្តុក
-                  </p>
+                  <p className="sup-sub">{tsup.subHeading}</p>
                 </div>
               </div>
 
@@ -381,19 +347,19 @@ export default function SupplierPage() {
                   disabled={loading}
                 >
                   <RefreshCw size={16} className={loading ? "sup-spin" : ""} />
-                  <span>ផ្ទុកឡើងវិញ</span>
+                  <span>{tsup.refresh}</span>
                 </button>
                 <button
                   className="sup-btn primary"
                   onClick={() => setIsCreateOpen(true)}
                 >
                   <Plus size={17} strokeWidth={2.4} />
-                  <span>បន្ថែមអ្នកផ្គត់ផ្គង់ថ្មី</span>
+                  <span>{tsup.addNew}</span>
                 </button>
               </div>
             </div>
 
-            {/* 🟢 Summary Cards */}
+            {/* Summary Cards */}
             <div className="sup-stats">
               {statCards.map((c, i) => {
                 const Icon = c.icon;
@@ -410,7 +376,7 @@ export default function SupplierPage() {
                       <div className="sup-statlabel">{c.label}</div>
                       <div className="sup-statnum">
                         {c.value}
-                        <small>ក្រុមហ៊ុន</small>
+                        <small>{tsup.companySuffix}</small>
                       </div>
                     </div>
                   </div>
@@ -422,29 +388,29 @@ export default function SupplierPage() {
               <div className="sup-error" role="alert">
                 <span>{errorMsg}</span>
                 <button type="button" onClick={fetchSuppliers}>
-                  ព្យាយាមម្តងទៀត
+                  {tsup.tryAgain}
                 </button>
               </div>
             )}
 
-            {/* 🟢 Search & Status Filter + Suppliers Table */}
+            {/* Search & Status Filter + Suppliers Table */}
             <div className="sup-panel sup-in" style={{ "--d": 4 }}>
               <div className="sup-toolbar">
                 <div className="sup-search">
                   <Search size={17} />
                   <input
                     type="text"
-                    placeholder="ស្វែងរកតាមក្រុមហ៊ុន, អ្នកទំនាក់ទំនង, ទូរស័ព្ទ ឬអាសយដ្ឋាន..."
+                    placeholder={tsup.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="ស្វែងរកអ្នកផ្គត់ផ្គង់"
+                    aria-label={tsup.searchPlaceholder}
                   />
                   {hasSearch && (
                     <button
                       type="button"
                       className="sup-clear"
                       onClick={() => setSearch("")}
-                      aria-label="លុបការស្វែងរក"
+                      aria-label={tsup.clearSearch}
                     >
                       <X size={16} />
                     </button>
@@ -454,7 +420,7 @@ export default function SupplierPage() {
                 <div
                   className="sup-seg"
                   role="group"
-                  aria-label="ច្រោះតាមស្ថានភាព"
+                  aria-label="Filter by status"
                 >
                   {filters.map((f) => (
                     <button
@@ -472,14 +438,14 @@ export default function SupplierPage() {
 
                 {!loading && (
                   <div className="sup-count">
-                    បង្ហាញ <b>{filteredSuppliers.length}</b> /{" "}
-                    {suppliers.length} ក្រុមហ៊ុន
+                    {tsup.showing} <b>{filteredSuppliers.length}</b> /{" "}
+                    {suppliers.length} {tsup.companySuffix}
                   </div>
                 )}
               </div>
 
               {loading ? (
-                <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+                <div aria-busy="true">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div className="sup-skel-row" key={i}>
                       <div className="sup-skel" style={{ width: 24 }} />
@@ -503,19 +469,15 @@ export default function SupplierPage() {
                     <Building2 size={32} strokeWidth={1.7} />
                   </div>
                   <h3 className="sup-emptytitle">
-                    {hasFilter
-                      ? "រកមិនឃើញទិន្នន័យអ្នកផ្គត់ផ្គង់ទេ"
-                      : "មិនទាន់មានអ្នកផ្គត់ផ្គង់ទេ"}
+                    {hasFilter ? tsup.emptyFilter : tsup.emptyNoFilter}
                   </h3>
                   <p className="sup-emptytext">
-                    {hasFilter
-                      ? "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង ឬប្តូរស្ថានភាព"
-                      : "ចាប់ផ្តើមបន្ថែមអ្នកផ្គត់ផ្គង់ដំបូងរបស់អ្នក"}
+                    {hasFilter ? tsup.emptySubFilter : tsup.emptySubNoFilter}
                   </p>
                   {hasFilter ? (
                     <button className="sup-btn ghost" onClick={clearFilters}>
                       <X size={16} />
-                      <span>សម្អាតការច្រោះ</span>
+                      <span>{tsup.clearFilters}</span>
                     </button>
                   ) : (
                     <button
@@ -523,7 +485,7 @@ export default function SupplierPage() {
                       onClick={() => setIsCreateOpen(true)}
                     >
                       <Plus size={17} strokeWidth={2.4} />
-                      <span>បន្ថែមអ្នកផ្គត់ផ្គង់ថ្មី</span>
+                      <span>{tsup.addNew}</span>
                     </button>
                   )}
                 </div>
@@ -533,13 +495,13 @@ export default function SupplierPage() {
                     <thead>
                       <tr>
                         <th style={{ width: 56 }}>#</th>
-                        <th>ក្រុមហ៊ុន / អ្នកផ្គត់ផ្គង់</th>
-                        <th>អ្នកទំនាក់ទំនង</th>
-                        <th>ទូរស័ព្ទ &amp; អ៊ីមែល</th>
-                        <th>គេហទំព័រ</th>
-                        <th>អាសយដ្ឋាន</th>
-                        <th style={{ textAlign: "center" }}>ស្ថានភាព</th>
-                        <th style={{ textAlign: "center" }}>សកម្មភាព</th>
+                        <th>{tsup.colCompany}</th>
+                        <th>{tsup.colContact}</th>
+                        <th>{tsup.colPhoneEmail}</th>
+                        <th>{tsup.colWebsite}</th>
+                        <th>{tsup.colAddress}</th>
+                        <th style={{ textAlign: "center" }}>{tsup.colStatus}</th>
+                        <th style={{ textAlign: "center" }}>{tsup.colActions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -567,7 +529,7 @@ export default function SupplierPage() {
                                   type="button"
                                   className="sup-avbtn"
                                   onClick={() => setViewingSupplier(sup)}
-                                  aria-label={`មើល ${title}`}
+                                  aria-label={`${tsup.viewTitle} ${title}`}
                                 >
                                   <span className="sup-av">{initial}</span>
                                 </button>
@@ -581,7 +543,7 @@ export default function SupplierPage() {
                                   </button>
                                   <div className="sup-id">
                                     {sup.company && sup.name
-                                      ? `${sup.name} • `
+                                      ? `${sup.name} · `
                                       : ""}
                                     ID: #{sup.id}
                                   </div>
@@ -622,7 +584,7 @@ export default function SupplierPage() {
                                   title={href}
                                 >
                                   <Globe size={13} />
-                                  <span>{hostOf(href)}</span>
+                                  <span>{hostOf(href, tsup.websiteFallback)}</span>
                                 </a>
                               ) : (
                                 <span className="sup-dash">-</span>
@@ -649,19 +611,19 @@ export default function SupplierPage() {
                               <span
                                 className={`sup-badge ${isActive ? "on" : "off"}`}
                               >
-                                {isActive ? "Active" : "Inactive"}
+                                {isActive ? tsup.statusActive : tsup.statusInactive}
                               </span>
                             </td>
 
-                            {/* 🟢 Actions (View, Edit, Delete) */}
+                            {/* Actions (View, Edit, Delete) */}
                             <td style={{ textAlign: "center" }}>
                               <div className="sup-acts">
                                 <button
                                   type="button"
                                   className="sup-act"
                                   onClick={() => setViewingSupplier(sup)}
-                                  title="មើល"
-                                  aria-label={`មើល ${title}`}
+                                  title={tsup.viewTitle}
+                                  aria-label={`${tsup.viewTitle} ${title}`}
                                 >
                                   <Eye size={17} />
                                 </button>
@@ -669,17 +631,17 @@ export default function SupplierPage() {
                                   type="button"
                                   className="sup-act"
                                   onClick={() => setEditingSupplier(sup)}
-                                  title="កែប្រែ"
-                                  aria-label={`កែប្រែ ${title}`}
+                                  title={tsup.editTitle}
+                                  aria-label={`${tsup.editTitle} ${title}`}
                                 >
                                   <Pencil size={17} />
                                 </button>
                                 <button
                                   type="button"
                                   className="sup-act danger"
-                                  onClick={() => openDelete(sup)}
-                                  title="លុប"
-                                  aria-label={`លុប ${title}`}
+                                  onClick={() => handleDelete(sup)}
+                                  title={tsup.deleteTitle}
+                                  aria-label={`${tsup.deleteTitle} ${title}`}
                                 >
                                   <Trash2 size={17} />
                                 </button>
@@ -696,90 +658,35 @@ export default function SupplierPage() {
           </div>
         </div>
 
-        {/* 🟢 3. Modal បង្កើតអ្នកផ្គត់ផ្គង់ថ្មី (Create Supplier) */}
+        {/* Modal បង្កើតអ្នកផ្គត់ផ្គង់ថ្មី */}
         <CreateSupplierModal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          onSuccess={fetchSuppliers}
+          onSuccess={() => {
+            fetchSuppliers();
+            toastr.success(tsup.toastCreateSuccessTitle, tsup.toastCreateSuccessMsg);
+          }}
         />
 
-        {/* 🟢 4. Modal មើលព័ត៌មានលម្អិតអ្នកផ្គត់ផ្គង់ (View Supplier) */}
+        {/* Modal មើលព័ត៌មានលម្អិតអ្នកផ្គត់ផ្គង់ */}
         <ViewSupplierModal
           isOpen={Boolean(viewingSupplier)}
           supplier={viewingSupplier}
           onClose={() => setViewingSupplier(null)}
           onEdit={(s) => setEditingSupplier(s)}
-          onDelete={openDelete}
+          onDelete={handleDelete}
         />
 
-        {/* 🟢 5. Modal កែប្រែព័ត៌មានអ្នកផ្គត់ផ្គង់ (Update Supplier) */}
+        {/* Modal កែប្រែព័ត៌មានអ្នកផ្គត់ផ្គង់ */}
         <EditSupplierModal
           isOpen={Boolean(editingSupplier)}
           supplier={editingSupplier}
           onClose={() => setEditingSupplier(null)}
-          onSuccess={fetchSuppliers}
+          onSuccess={() => {
+            fetchSuppliers();
+            toastr.success(tsup.toastUpdateSuccessTitle, tsup.toastUpdateSuccessMsg);
+          }}
         />
-
-        {/* 🟢 6. Modal បញ្ជាក់ការលុបអ្នកផ្គត់ផ្គង់ (Delete Confirmation Modal) */}
-        {deletingSupplier && (
-          <div
-            className="sup-ovl"
-            onClick={() => !isDeleting && setDeletingSupplier(null)}
-          >
-            <div
-              className="sup-dlg"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sup-dlg-title"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sup-dlgico">
-                <AlertTriangle size={28} />
-              </div>
-
-              <h3 id="sup-dlg-title">បញ្ជាក់ការលុបអ្នកផ្គត់ផ្គង់</h3>
-              <p>
-                តើបងពិតជាចង់លុបអ្នកផ្គត់ផ្គង់{" "}
-                <strong>
-                  "{deletingSupplier.company || deletingSupplier.name}"
-                </strong>{" "}
-                នេះមែនទេ?
-              </p>
-
-              {deleteError && (
-                <div className="sup-derr" role="alert">
-                  {deleteError}
-                </div>
-              )}
-
-              <div className="sup-dlgbtns">
-                <button
-                  type="button"
-                  className="sup-btn ghost"
-                  disabled={isDeleting}
-                  onClick={() => setDeletingSupplier(null)}
-                >
-                  បោះបង់
-                </button>
-                <button
-                  type="button"
-                  className="sup-btn danger"
-                  disabled={isDeleting}
-                  onClick={handleConfirmDelete}
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 size={17} className="sup-spin" />
-                      កំពុងលុប...
-                    </>
-                  ) : (
-                    "យល់ព្រមលុប"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

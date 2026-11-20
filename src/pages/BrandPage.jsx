@@ -7,6 +7,7 @@ import CreateBrandModal from './brands/CreateBrandModal';
 import EditBrandModal from './brands/EditBrandModal';
 import ViewBrandModal from './brands/ViewBrandModal';
 import ConfirmDeleteModal from './brands/ConfirmDeleteModal';
+import { useTranslation } from '../utils/translations';
 
 const css = `
 .br { --ink:#0f1f1d; --muted:#6a8280; --line:#e6eeec; --teal:#0f766e;
@@ -175,17 +176,20 @@ function Logo({ b }) {
   );
 }
 
-function Actions({ onView, onEdit, onDelete }) {
+function Actions({ onView, onEdit, onDelete, tb }) {
   return (
     <div className="br-acts">
-      <button className="br-ib v" onClick={onView} aria-label="View brand" title="មើល"><Eye size={15} /></button>
-      <button className="br-ib e" onClick={onEdit} aria-label="Edit brand" title="កែប្រែ"><Pencil size={15} /></button>
-      <button className="br-ib d" onClick={onDelete} aria-label="Delete brand" title="លុប"><Trash2 size={15} /></button>
+      <button className="br-ib v" onClick={onView} aria-label="View brand" title={tb.viewTitle}><Eye size={15} /></button>
+      <button className="br-ib e" onClick={onEdit} aria-label="Edit brand" title={tb.editTitle}><Pencil size={15} /></button>
+      <button className="br-ib d" onClick={onDelete} aria-label="Delete brand" title={tb.deleteTitle}><Trash2 size={15} /></button>
     </div>
   );
 }
 
 export default function BrandPage() {
+  const { t } = useTranslation();
+  const tb = t.brands;
+
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -194,7 +198,6 @@ export default function BrandPage() {
   const [view, setView] = useState('grid');
   const [page, setPage] = useState(1);
 
-  // Modal states (Create, View, Edit, Delete)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingBrand, setViewingBrand] = useState(null);
   const [editingBrand, setEditingBrand] = useState(null);
@@ -215,7 +218,7 @@ export default function BrandPage() {
       setBrands(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('Error fetching brands:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យម៉ាកទំនិញ');
+      setErrorMsg(error.message || tb.fetchError);
     } finally {
       setLoading(false);
     }
@@ -223,7 +226,6 @@ export default function BrandPage() {
 
   const askDelete = (b) => { setDeleteError(''); setDeletingBrand(b); };
 
-  // មុខងារលុបម៉ាកទំនិញ
   const handleConfirmDelete = async () => {
     if (!deletingBrand?.id) return;
     try {
@@ -233,7 +235,7 @@ export default function BrandPage() {
       setDeletingBrand(null);
       fetchBrands();
     } catch (err) {
-      setDeleteError(err?.message || 'បរាជ័យក្នុងការលុបម៉ាកទំនិញនេះ');
+      setDeleteError(err?.message || tb.deleteError);
     } finally {
       setIsDeleting(false);
     }
@@ -285,23 +287,23 @@ export default function BrandPage() {
       <div className="br">
         <div className="br-top">
           <div>
-            <h2>🏷️ បញ្ជីម៉ាកទំនិញ</h2>
-            <p>គ្រប់គ្រងម៉ាកសញ្ញាទំនិញ រូបសញ្ញា (Logo) និងការពិពណ៌នាម៉ាកនីមួយៗ</p>
+            <h2>{tb.heading}</h2>
+            <p>{tb.subHeading}</p>
           </div>
           <div className="br-actions">
-            <button className="br-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បន្ថែមម៉ាកថ្មី</button>
-            <button className="br-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> Export CSV</button>
-            <button className="br-btn" onClick={fetchBrands} disabled={loading}><RefreshCw size={16} className={loading ? 'br-spin' : ''} /> ផ្ទុកឡើងវិញ</button>
+            <button className="br-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {tb.addNew}</button>
+            <button className="br-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> {tb.exportCsv}</button>
+            <button className="br-btn" onClick={fetchBrands} disabled={loading}><RefreshCw size={16} className={loading ? 'br-spin' : ''} /> {tb.refresh}</button>
           </div>
         </div>
 
-        {errorMsg && <div className="br-err" role="alert"><span>{errorMsg}</span><button onClick={fetchBrands}>Try again</button></div>}
+        {errorMsg && <div className="br-err" role="alert"><span>{errorMsg}</span><button onClick={fetchBrands}>{tb.tryAgain}</button></div>}
 
         <div className="br-tiles">
-          <Tile label="ម៉ាកទំនិញសរុប" target={stats.total} icon={Tag} tone="t-dark" hero delay={0} />
-          <Tile label="មានរូបសញ្ញា (Logo)" target={stats.withLogo} icon={ImageIcon} tone="t-green" delay={70} />
-          <Tile label="មិនទាន់មាន Logo" target={stats.noLogo} icon={ImageOff} tone="t-amber" delay={140} />
-          <Tile label="បង្កើតខែនេះ" target={stats.fresh} icon={CalendarPlus} tone="t-blue" delay={210} />
+          <Tile label={tb.tileTotal} target={stats.total} icon={Tag} tone="t-dark" hero delay={0} />
+          <Tile label={tb.tileWithLogo} target={stats.withLogo} icon={ImageIcon} tone="t-green" delay={70} />
+          <Tile label={tb.tileNoLogo} target={stats.noLogo} icon={ImageOff} tone="t-amber" delay={140} />
+          <Tile label={tb.tileFresh} target={stats.fresh} icon={CalendarPlus} tone="t-blue" delay={210} />
         </div>
 
         <section className="br-panel">
@@ -309,33 +311,33 @@ export default function BrandPage() {
             <div className="br-left">
               <div className="br-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកឈ្មោះម៉ាក, Slug, ការពិពណ៌នា…" aria-label="Search brands" />
-                {search && <button className="br-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={tb.searchPlaceholder} aria-label="Search brands" />
+                {search && <button className="br-x" onClick={() => reset(setSearch)('')} aria-label={tb.clearSearch}><X size={15} /></button>}
               </div>
             </div>
             <div className="br-right">
               <select className="br-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort brands">
-                <option value="name">Name A–Z</option>
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
+                <option value="name">{tb.sortName}</option>
+                <option value="newest">{tb.sortNewest}</option>
+                <option value="oldest">{tb.sortOldest}</option>
               </select>
               <div className="br-seg" role="group" aria-label="View">
-                <button className={`br-sb${view === 'grid' ? ' on' : ''}`} onClick={() => reset(setView)('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
-                <button className={`br-sb${view === 'list' ? ' on' : ''}`} onClick={() => reset(setView)('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={16} /></button>
+                <button className={`br-sb${view === 'grid' ? ' on' : ''}`} onClick={() => reset(setView)('grid')} aria-label={tb.gridView} aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
+                <button className={`br-sb${view === 'list' ? ' on' : ''}`} onClick={() => reset(setView)('list')} aria-label={tb.listView} aria-pressed={view === 'list'}><List size={16} /></button>
               </div>
             </div>
           </div>
 
           {view === 'list' && (
-            <div className="br-head"><span>Brand</span><span className="br-hide-m">Slug</span><span className="br-hide-m br-hide-md">Description</span><span className="br-hide-m">Added</span><span /></div>
+            <div className="br-head"><span>{tb.colBrand}</span><span className="br-hide-m">{tb.colSlug}</span><span className="br-hide-m br-hide-md">{tb.colDescription}</span><span className="br-hide-m">{tb.colAdded}</span><span /></div>
           )}
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="br-skel" key={i}><i style={{ width: 46, height: 46, borderRadius: 13 }} /><i style={{ width: '28%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="br-empty">
-              <b>{brands.length === 0 ? 'រកមិនឃើញទិន្នន័យម៉ាកទំនិញទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {brands.length > 0 && 'Try a different name or slug.'}
+              <b>{brands.length === 0 ? tb.emptyNoData : tb.emptyNoResult}</b>
+              {brands.length > 0 && tb.emptyHint}
             </div>
           ) : view === 'list' ? (
             <div key={`l-${sort}-${current}`}>
@@ -348,7 +350,7 @@ export default function BrandPage() {
                   <div className="br-hide-m"><span className="br-slug">{b.slug || '-'}</span></div>
                   <div className="br-hide-m br-hide-md br-desc">{b.description || '-'}</div>
                   <span className="br-date br-hide-m">{formatDate(b.created_at)}</span>
-                  <Actions onView={() => setViewingBrand(b)} onEdit={() => setEditingBrand(b)} onDelete={() => askDelete(b)} />
+                  <Actions onView={() => setViewingBrand(b)} onEdit={() => setEditingBrand(b)} onDelete={() => askDelete(b)} tb={tb} />
                 </div>
               ))}
             </div>
@@ -365,11 +367,11 @@ export default function BrandPage() {
                     <div className="br-cbody">
                       <b onClick={() => setViewingBrand(b)}>{b.name}</b>
                       <span className="br-slug">{b.slug || '-'}</span>
-                      <div className="br-desc">{b.description || 'គ្មានការពិពណ៌នា'}</div>
+                      <div className="br-desc">{b.description || tb.noDescription}</div>
                     </div>
                     <div className="br-cfoot">
                       <span className="br-date">{formatDate(b.created_at)}</span>
-                      <Actions onView={() => setViewingBrand(b)} onEdit={() => setEditingBrand(b)} onDelete={() => askDelete(b)} />
+                      <Actions onView={() => setViewingBrand(b)} onEdit={() => setEditingBrand(b)} onDelete={() => askDelete(b)} tb={tb} />
                     </div>
                   </div>
                 );
@@ -379,7 +381,7 @@ export default function BrandPage() {
 
           {!loading && visible.length > 0 && (
             <div className="br-foot">
-              <span>Showing {start + 1}–{Math.min(start + size, visible.length)} of {visible.length}</span>
+              <span>{tb.showing} {start + 1}–{Math.min(start + size, visible.length)} {tb.of} {visible.length}</span>
               <div className="br-pager">
                 <button className="br-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -395,9 +397,9 @@ export default function BrandPage() {
       <EditBrandModal isOpen={Boolean(editingBrand)} brand={editingBrand} onClose={() => setEditingBrand(null)} onSuccess={fetchBrands} />
       <ConfirmDeleteModal
         isOpen={Boolean(deletingBrand)}
-        title="បញ្ជាក់ការលុបម៉ាកទំនិញ"
-        message={<>តើអ្នកពិតជាចង់លុបម៉ាកទំនិញ <b>“{deletingBrand?.name}”</b> នេះមែនទេ? ការលុបមិនអាចត្រឡប់វិញបានទេ។</>}
-        confirmLabel="យល់ព្រមលុប"
+        title={tb.deleteModalTitle}
+        message={<>{tb.deleteModalPrefix} <b>“{deletingBrand?.name}”</b> {tb.deleteModalSuffix}</>}
+        confirmLabel={tb.deleteModalConfirm}
         busy={isDeleting}
         error={deleteError}
         onCancel={() => setDeletingBrand(null)}

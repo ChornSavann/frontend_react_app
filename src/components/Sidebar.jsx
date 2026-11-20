@@ -15,13 +15,15 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  Truck,
 } from "lucide-react";
 import { listproduct } from "../services/productService";
+import { useTranslation } from "../utils/translations";
 
 export const SIDEBAR_WIDTH = 270;
 export const SIDEBAR_WIDTH_COLLAPSED = 80;
 
-const REMEMBER_KEY = "lg_remember_email"; // used by LoginPage ("Remember me")
+const REMEMBER_KEY = "lg_remember_email";
 
 const menus = [
   { key: "dashboard", group: 0, name: "Home", path: "/dashboard", icon: Home },
@@ -34,14 +36,14 @@ const menus = [
       { name: "Catalog", path: "/catalog" },
       { name: "Order Form", path: "/order-form" },
       { name: "Sales History (Orders)", path: "/sales-history" },
-      { name: "Vendor Invoice", path: "/vendor-invoice" },
+      { name: "Vendor Invoice", path: "/vendor-invoices" },
     ],
   },
   {
     key: "pos",
     group: 1,
     name: "Point of Sale",
-    path: "/pos",
+    path: "/orders",
     icon: CreditCard,
   },
   {
@@ -56,6 +58,13 @@ const menus = [
       { name: "Units", path: "/units" },
       { name: "Stock Adjustment", path: "/stock-adjustment" },
     ],
+  },
+  {
+    key: "delivery",
+    group: 1,
+    name: "delivery",
+    icon: Truck,
+    subItems: [{ name: "Delivery", path: "/orders/delivery-orders" }],
   },
   {
     key: "expenses",
@@ -118,10 +127,13 @@ const menus = [
   },
   {
     key: "settings",
-    group: 3,
+    group: 1,
     name: "Settings",
     path: "/settings",
     icon: Settings,
+    subItems:[
+      {name:"Auth Log",path:"/auth-logs"},
+    ]
   },
 ];
 
@@ -179,7 +191,6 @@ const css = `
 .sb-item { height: 46px; padding: 0 12px 0 12px; gap: 12px; font-size: 14.5px; font-weight: 500; color: var(--text); }
 .sb-item:hover { background: rgba(255,255,255,.7); color: var(--ink); }
 
-/* active = calm white pill + a curved "horn" marker on the left (AdminLTE-like, but softer) */
 .sb-item::before { content: ''; position: absolute; left: 6px; top: 50%; width: 9px; height: 32px;
   background: linear-gradient(180deg, #2aa595, #176f65);
   clip-path: path('M9 0 C0 7 0 25 9 32 C5.8 23 5.8 9 9 0Z');
@@ -197,14 +208,12 @@ const css = `
 .sb-chev { flex-shrink: 0; color: var(--icon); transition: transform .28s cubic-bezier(.3,1.3,.5,1), color .2s; }
 .sb-chev.open { transform: rotate(180deg); color: var(--teal-d); }
 
-/* ---------- expandable group: a plain white card when open (no loud colours) ---------- */
 .sb-group { border-radius: 16px; transition: background .25s, box-shadow .25s; }
 .sb:not(.collapsed) .sb-group.open { background: #fff; box-shadow: 0 8px 20px -14px rgba(14,90,81,.4), 0 0 0 1px rgba(31,138,125,.1); }
 .sb:not(.collapsed) .sb-group.open .sb-item { color: var(--ink); font-weight: 600; }
 .sb:not(.collapsed) .sb-group.open .sb-item.active { background: transparent; box-shadow: none; color: var(--teal-d); }
 .sb:not(.collapsed) .sb-group.open .sb-item:hover { background: var(--hover); }
 
-/* sub-items: small circles like AdminLTE; the current page gets a filled circle */
 .sb-sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s cubic-bezier(.4,0,.2,1); }
 .sb-sub.open { grid-template-rows: 1fr; }
 .sb-sub > div { overflow: hidden; }
@@ -221,7 +230,8 @@ const css = `
 /* ---------- footer / profile ---------- */
 .sb-foot { padding: 10px 12px 14px; flex-shrink: 0; }
 .sb-user { display: flex; align-items: center; gap: 11px; padding: 10px; border-radius: 16px; background: #fff; border: 1px solid #d3e8e1; box-shadow: 0 10px 20px -14px rgba(14,90,81,.5); }
-.sb-avatar { width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; font-weight: 700; font-size: 14.5px; color: #fff; background: linear-gradient(145deg, #3bb5a4, #1a7d70); }
+.sb-avatar { width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; font-weight: 700; font-size: 14.5px; color: #fff; background: linear-gradient(145deg, #3bb5a4, #1a7d70); overflow: hidden; }
+.sb-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sb-uinfo { flex: 1; min-width: 0; line-height: 1.3; }
 .sb-uname { color: var(--ink); font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-urole { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -234,7 +244,7 @@ const css = `
 .sb.collapsed .sb-item { justify-content: center; padding: 0; width: 48px; margin-left: auto; margin-right: auto; }
 .sb.collapsed .sb-user { flex-direction: column; padding: 8px 0; background: none; border: 0; box-shadow: none; gap: 8px; }
 
-/* tooltip for the collapsed rail (fixed, so the scrolling nav can't clip it) */
+/* tooltip for the collapsed rail */
 .sb-tip { position: fixed; z-index: 1100; transform: translateY(-50%); background: var(--ink); color: #fff; font-size: 13px; font-weight: 500;
   padding: 7px 12px; border-radius: 9px; white-space: nowrap; pointer-events: none; box-shadow: 0 10px 24px rgba(15,55,51,.3); animation: sb-tip .16s ease-out both; }
 .sb-tip::before { content: ''; position: absolute; left: -4px; top: 50%; width: 8px; height: 8px; background: var(--ink); transform: translateY(-50%) rotate(45deg); border-radius: 2px; }
@@ -248,19 +258,41 @@ const css = `
 function getUser() {
   try {
     const u = JSON.parse(localStorage.getItem("user") || "{}");
+    const rawAvatar =
+      localStorage.getItem("user_avatar") ||
+      localStorage.getItem("user_image") ||
+      u.image_url ||
+      u.image ||
+      null;
+
+    let avatarUrl = null;
+    if (rawAvatar && rawAvatar !== "null" && rawAvatar !== "undefined") {
+      if (
+        rawAvatar.startsWith("http") ||
+        rawAvatar.startsWith("data:") ||
+        rawAvatar.startsWith("blob:")
+      ) {
+        avatarUrl = rawAvatar;
+      } else {
+        avatarUrl = `${API_ORIGIN}/${rawAvatar.replace(/^\/+/, "")}`;
+      }
+    }
+
     return {
       name:
         localStorage.getItem("user_name") || u.name || u.username || "Admin",
       role: localStorage.getItem("user_role") || u.role || "Store owner",
+      avatarUrl,
     };
   } catch {
-    return { name: "Admin", role: "Store owner" };
+    return { name: "Admin", role: "Store owner", avatarUrl: null };
   }
 }
 
 export default function Sidebar({ onCollapseChange }) {
   const navigate = useNavigate();
   const { pathname: path } = useLocation();
+  const { t } = useTranslation();
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -269,11 +301,17 @@ export default function Sidebar({ onCollapseChange }) {
       return false;
     }
   });
-  // accordion: only ONE group is open at a time
   const [openKey, setOpenKey] = useState(() => findGroupKey(path));
   const [productCount, setProductCount] = useState(null);
   const [tip, setTip] = useState(null);
+  const [imgError, setImgError] = useState(false);
   const user = getUser();
+
+  // Helper សម្រាប់ទាញយកឈ្មោះម៉ឺនុយដែលបានបកប្រែ
+  const getMenuLabel = (m) => t?.sidebar?.menus?.[m.key] || m.name;
+  const getSubLabel = (s) => t?.sidebar?.subItems?.[s.path] || s.name;
+  const subtitleText = t?.sidebar?.subtitle || "Store manager";
+  const logoutText = t?.sidebar?.logout || "Logout";
 
   useEffect(() => {
     let mounted = true;
@@ -295,7 +333,6 @@ export default function Sidebar({ onCollapseChange }) {
     };
   }, []);
 
-  // when the page changes, open the group that owns it (or close all)
   useEffect(() => {
     setOpenKey(findGroupKey(path));
   }, [path]);
@@ -329,19 +366,21 @@ export default function Sidebar({ onCollapseChange }) {
   };
 
   const handleLogout = () => {
-    // keep the "Remember me" email from the login page
     let remembered = null;
+    const currentTheme = localStorage.getItem("theme");
+    const currentLang = localStorage.getItem("app_lang");
     try {
       remembered = localStorage.getItem(REMEMBER_KEY);
     } catch {}
     localStorage.clear();
     try {
       if (remembered) localStorage.setItem(REMEMBER_KEY, remembered);
+      if (currentTheme) localStorage.setItem("theme", currentTheme);
+      if (currentLang) localStorage.setItem("app_lang", currentLang);
     } catch {}
     navigate("/login");
   };
 
-  // tooltip helpers (only while collapsed)
   const showTip = (e, text) => {
     if (!collapsed) return;
     const r = e.currentTarget.getBoundingClientRect();
@@ -367,7 +406,7 @@ export default function Sidebar({ onCollapseChange }) {
           <div className="sb-brand">
             <div className="sb-logo">P</div>
             <div className="sb-title">
-              POS &amp; Inventory<small>Store manager</small>
+              POS &amp; Inventory<small>{subtitleText}</small>
             </div>
           </div>
         </div>
@@ -375,7 +414,11 @@ export default function Sidebar({ onCollapseChange }) {
         <button
           className="sb-btn sb-toggle"
           onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={
+            collapsed
+              ? t?.sidebar?.expand || "Expand sidebar"
+              : t?.sidebar?.collapse || "Collapse sidebar"
+          }
         >
           {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
         </button>
@@ -387,20 +430,21 @@ export default function Sidebar({ onCollapseChange }) {
             const isOpen = hasSub && !collapsed && openKey === m.key;
             const active = isActive(m);
             const newGroup = i > 0 && m.group !== menus[i - 1].group;
+            const menuLabel = getMenuLabel(m);
 
             const row = (
               <button
                 className={`sb-btn sb-item${active ? " active" : ""}`}
                 onClick={() => handleClick(m)}
-                aria-label={m.name}
+                aria-label={menuLabel}
                 aria-expanded={hasSub ? isOpen : undefined}
                 aria-current={!hasSub && active ? "page" : undefined}
-                {...tipProps(m.name)}
+                {...tipProps(menuLabel)}
               >
                 <span className="sb-ico">
                   <Icon size={19} strokeWidth={1.9} />
                 </span>
-                <span className="sb-label">{m.name}</span>
+                <span className="sb-label">{menuLabel}</span>
 
                 {m.key === "inventory" && productCount !== null && (
                   <span className="sb-badge">{productCount}</span>
@@ -434,7 +478,7 @@ export default function Sidebar({ onCollapseChange }) {
                                     tabIndex={isOpen ? 0 : -1}
                                     aria-current={on ? "page" : undefined}
                                   >
-                                    <span>{s.name}</span>
+                                    <span>{getSubLabel(s)}</span>
 
                                     {s.path === "/inventory" &&
                                       productCount !== null && (
@@ -462,7 +506,15 @@ export default function Sidebar({ onCollapseChange }) {
         <div className="sb-foot">
           <div className="sb-user">
             <div className="sb-avatar">
-              {user.name.trim().charAt(0).toUpperCase()}
+              {user.avatarUrl && !imgError ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.name}
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                user.name.trim().charAt(0).toUpperCase()
+              )}
             </div>
             <div className="sb-uinfo">
               <div className="sb-uname">{user.name}</div>
@@ -471,8 +523,8 @@ export default function Sidebar({ onCollapseChange }) {
             <button
               className="sb-btn sb-logout"
               onClick={handleLogout}
-              aria-label="Logout"
-              {...tipProps("Logout")}
+              aria-label={logoutText}
+              {...tipProps(logoutText)}
             >
               <LogOut size={18} strokeWidth={1.9} />
             </button>

@@ -6,6 +6,8 @@ import { listUnits, deleteUnit } from "../services/unitService";
 import CreateUnitModal from "./units/CreateUnitModal";
 import EditUnitModal from "./units/EditUnitModal";
 import ViewUnitModal from "./units/ViewUnitModal";
+import ToastrContainer, { toastr, sweetConfirm } from "../components/Toastr";
+import { useTranslation } from "../utils/translations";
 import {
   Search,
   Scale,
@@ -16,8 +18,6 @@ import {
   Eye,
   Trash2,
   X,
-  Loader2,
-  AlertTriangle,
 } from "lucide-react";
 
 const css = `
@@ -134,65 +134,35 @@ const css = `
 .up .up-emptytitle { margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--ink); }
 .up-emptytext { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
 
-/* ---------- delete dialog ---------- */
-.up-ovl { position: fixed; inset: 0; z-index: 2100; display: flex; justify-content: center; align-items: center; padding: 20px;
-  background: rgba(15,55,51,.45); backdrop-filter: blur(4px); animation: up-ovl .2s ease both;
-  font-family: 'Plus Jakarta Sans','Noto Sans Khmer',-apple-system,sans-serif; }
-@keyframes up-ovl { from { opacity: 0; } to { opacity: 1; } }
-.up-dlg { width: 100%; max-width: 430px; padding: 28px 26px 24px; text-align: center; background: #fff; border-radius: 22px; color: var(--ink); line-height: 1.6;
-  box-shadow: 0 30px 70px -20px rgba(15,55,51,.5); animation: up-pop .32s cubic-bezier(.2,1.2,.4,1) both; }
-@keyframes up-pop { from { opacity: 0; transform: translateY(14px) scale(.95); } to { opacity: 1; transform: none; } }
-.up-dlgico { position: relative; width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; background: #fdeceb; color: #c8372d; }
-.up-dlgico::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(200,55,45,.25); animation: up-ring 1.8s ease-out infinite; }
-@keyframes up-ring { from { opacity: 1; transform: scale(.9); } to { opacity: 0; transform: scale(1.25); } }
-.up .up-dlg h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
-.up-dlg p { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.7; }
-.up-dlg p strong { color: var(--ink); }
-.up-derr { margin: -8px 0 18px; padding: 10px 12px; border-radius: 12px; text-align: left; font-size: 13px; background: #fff4f2; color: #b42318; border: 1px solid #fcd5cf; }
-.up-dlgbtns { display: flex; gap: 10px; }
-.up-dlgbtns .up-btn { flex: 1; justify-content: center; }
-.up-btn.danger { color: #fff; background: linear-gradient(135deg, #de4b3f, #b9291f); box-shadow: 0 10px 20px -8px rgba(185,41,31,.55); }
-.up-btn.danger:hover:not(:disabled) { transform: translateY(-1px); }
-
 @media (max-width: 720px) {
   .up-body { padding: 20px 16px 36px; }
   .up .up-title small { display: block; margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .up *, .up *::before, .up *::after, .up-ovl, .up-dlg { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .up *, .up *::before, .up *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 `;
 
 const opSymbol = (op) => ({ "*": "×", "/": "÷", "+": "+", "-": "−" })[op] ?? op ?? "×";
 
 export default function UnitPage() {
+  const { lang, t } = useTranslation();
+  const tu = t.units;
+
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [search, setSearch] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_WIDTH);
 
-  // 🟢 State សម្រាប់បើក/បិទ Modal ទាំង ៤ (Create, View, Edit, Delete)
+  // State សម្រាប់បើក/បិទ Modal (Create, View, Edit)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingUnit, setViewingUnit] = useState(null);
   const [editingUnit, setEditingUnit] = useState(null);
-  const [deletingUnit, setDeletingUnit] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetchUnits();
   }, []);
-
-  // បិទ Dialog លុប ដោយចុច Esc
-  useEffect(() => {
-    if (!deletingUnit) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape" && !isDeleting) setDeletingUnit(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deletingUnit, isDeleting]);
 
   const fetchUnits = async () => {
     try {
@@ -203,34 +173,36 @@ export default function UnitPage() {
       setUnits(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error("Error fetching units:", error);
-      setErrorMsg(error.message || "បរាជ័យក្នុងការទាញយកទិន្នន័យឯកតាទំនិញ");
+      const msg = error.message || tu.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tu.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const openDelete = (u) => {
-    setDeleteError("");
-    setDeletingUnit(u);
-  };
+  // មុខងារលុបឯកតាទំនិញដោយប្រើ Sweet Confirm & Toastr
+  const handleDelete = async (u) => {
+    const confirmed = await sweetConfirm({
+      title: tu.confirmDeleteTitle,
+      text: tu.confirmDeleteText(u.name),
+      confirmText: tu.confirmDeleteBtn,
+      cancelText: tu.cancelBtn,
+      type: "danger",
+    });
 
-  // មុខងារលុបឯកតាទំនិញ (Delete Unit)
-  const handleConfirmDelete = async () => {
-    if (!deletingUnit?.id) return;
-    try {
-      setIsDeleting(true);
-      setDeleteError("");
-      await deleteUnit(deletingUnit.id);
-      setDeletingUnit(null);
-      fetchUnits();
-    } catch (err) {
-      setDeleteError(err?.message || "បរាជ័យក្នុងការលុបឯកតាទំនិញនេះ");
-    } finally {
-      setIsDeleting(false);
+    if (confirmed) {
+      try {
+        await deleteUnit(u.id);
+        setUnits((prev) => prev.filter((item) => item.id !== u.id));
+        toastr.success(tu.toastDeleteSuccessTitle, tu.toastDeleteSuccessMsg(u.name));
+      } catch (err) {
+        toastr.error(tu.toastErrorTitle, err?.message || tu.toastDeleteErrorMsg);
+      }
     }
   };
 
-  // ច្រោះឯកតាទំនិញតាមការ Search (ឈ្មោះ ឬ ឈ្មោះកាត់)
+  // ច្រោះឯកតាទំនិញតាមការ Search
   const filteredUnits = useMemo(() => {
     return units.filter((u) => {
       const q = search.trim().toLowerCase();
@@ -253,7 +225,7 @@ export default function UnitPage() {
     if (!dateStr) return "-";
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString("km-KH", {
+    return d.toLocaleDateString(lang === "km" ? "km-KH" : "en-GB", {
       year: "numeric",
       month: "short",
       day: "2-digit",
@@ -261,9 +233,9 @@ export default function UnitPage() {
   };
 
   const statCards = [
-    { label: "ឯកតាសរុប", value: stats.total, icon: Scale, tone: "t1" },
-    { label: "ឯកតាមូលដ្ឋាន (Base)", value: stats.baseUnits, icon: Scale, tone: "t2" },
-    { label: "ឯកតាបំប្លែង (Derived)", value: stats.derived, icon: Layers, tone: "t3" },
+    { label: tu.statTotal, value: stats.total, icon: Scale, tone: "t1" },
+    { label: tu.statBase, value: stats.baseUnits, icon: Scale, tone: "t2" },
+    { label: tu.statDerived, value: stats.derived, icon: Layers, tone: "t3" },
   ];
 
   const hasSearch = search.trim() !== "";
@@ -271,16 +243,15 @@ export default function UnitPage() {
   return (
     <>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="up">
-        {/* 🟢 1. Sidebar */}
         <Sidebar onCollapseChange={(_, width) => setSidebarWidth(width)} />
 
-        {/* 🟢 2. Main Content */}
         <div className="up-main" style={{ marginLeft: `${sidebarWidth}px` }}>
           <Appbar />
 
           <div className="up-body">
-            {/* 🟢 Header & Action Buttons */}
+            {/* Header & Action Buttons */}
             <div className="up-head up-in" style={{ "--d": 0 }}>
               <div className="up-titlewrap">
                 <div className="up-titleico">
@@ -288,27 +259,26 @@ export default function UnitPage() {
                 </div>
                 <div>
                   <h2 className="up-title">
-                    បញ្ជីឯកតាទំនិញ<small>Product Units</small>
+                    {tu.heading}
+                    {lang === "km" && <small>Product Units</small>}
                   </h2>
-                  <p className="up-sub">
-                    គ្រប់គ្រងឯកតាគិតប្រាក់ (កញ្ចប់, កំប៉ុង, ដប, កេស...) និងទំនាក់ទំនងឯកតា
-                  </p>
+                  <p className="up-sub">{tu.subHeading}</p>
                 </div>
               </div>
 
               <div className="up-actions">
                 <button className="up-btn ghost" onClick={fetchUnits} disabled={loading}>
                   <RefreshCw size={16} className={loading ? "up-spin" : ""} />
-                  <span>ផ្ទុកឡើងវិញ</span>
+                  <span>{tu.refresh}</span>
                 </button>
                 <button className="up-btn primary" onClick={() => setIsCreateOpen(true)}>
                   <Plus size={17} strokeWidth={2.4} />
-                  <span>បន្ថែមឯកតាថ្មី</span>
+                  <span>{tu.addNew}</span>
                 </button>
               </div>
             </div>
 
-            {/* 🟢 Summary Cards */}
+            {/* Summary Cards */}
             <div className="up-stats">
               {statCards.map((c, i) => {
                 const Icon = c.icon;
@@ -321,7 +291,7 @@ export default function UnitPage() {
                       <div className="up-statlabel">{c.label}</div>
                       <div className="up-statnum">
                         {c.value}
-                        <small>ឯកតា</small>
+                        <small>{tu.unitSuffix}</small>
                       </div>
                     </div>
                   </div>
@@ -333,29 +303,29 @@ export default function UnitPage() {
               <div className="up-error" role="alert">
                 <span>{errorMsg}</span>
                 <button type="button" onClick={fetchUnits}>
-                  ព្យាយាមម្តងទៀត
+                  {tu.tryAgain}
                 </button>
               </div>
             )}
 
-            {/* 🟢 Search + Units Table */}
+            {/* Search + Units Table */}
             <div className="up-panel up-in" style={{ "--d": 4 }}>
               <div className="up-toolbar">
                 <div className="up-search">
                   <Search size={17} />
                   <input
                     type="text"
-                    placeholder="ស្វែងរកតាមឈ្មោះឯកតា ឬ ឈ្មោះកាត់..."
+                    placeholder={tu.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="ស្វែងរកឯកតា"
+                    aria-label={tu.searchPlaceholder}
                   />
                   {hasSearch && (
                     <button
                       type="button"
                       className="up-clear"
                       onClick={() => setSearch("")}
-                      aria-label="លុបការស្វែងរក"
+                      aria-label={tu.clearSearch}
                     >
                       <X size={16} />
                     </button>
@@ -363,13 +333,13 @@ export default function UnitPage() {
                 </div>
                 {!loading && (
                   <div className="up-count">
-                    បង្ហាញ <b>{filteredUnits.length}</b> / {units.length} ឯកតា
+                    {tu.showing} <b>{filteredUnits.length}</b> / {units.length} {tu.unitSuffix}
                   </div>
                 )}
               </div>
 
               {loading ? (
-                <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+                <div aria-busy="true">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div className="up-skel-row" key={i}>
                       <div className="up-skel" style={{ width: 24 }} />
@@ -387,22 +357,20 @@ export default function UnitPage() {
                     <Scale size={32} strokeWidth={1.7} />
                   </div>
                   <h3 className="up-emptytitle">
-                    {hasSearch ? "រកមិនឃើញទិន្នន័យឯកតាទេ" : "មិនទាន់មានឯកតាទំនិញទេ"}
+                    {hasSearch ? tu.emptySearch : tu.emptyNoSearch}
                   </h3>
                   <p className="up-emptytext">
-                    {hasSearch
-                      ? "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង"
-                      : "ចាប់ផ្តើមបង្កើតឯកតាដំបូងរបស់អ្នក"}
+                    {hasSearch ? tu.emptySubSearch : tu.emptySubNoSearch}
                   </p>
                   {hasSearch ? (
                     <button className="up-btn ghost" onClick={() => setSearch("")}>
                       <X size={16} />
-                      <span>លុបការស្វែងរក</span>
+                      <span>{tu.clearSearch}</span>
                     </button>
                   ) : (
                     <button className="up-btn primary" onClick={() => setIsCreateOpen(true)}>
                       <Plus size={17} strokeWidth={2.4} />
-                      <span>បន្ថែមឯកតាថ្មី</span>
+                      <span>{tu.addNew}</span>
                     </button>
                   )}
                 </div>
@@ -412,12 +380,12 @@ export default function UnitPage() {
                     <thead>
                       <tr>
                         <th style={{ width: 60 }}>#</th>
-                        <th>ឈ្មោះឯកតា</th>
-                        <th>ឈ្មោះកាត់</th>
-                        <th>ឯកតាមូលដ្ឋាន</th>
-                        <th>ប្រមាណវិធី &amp; តម្លៃ</th>
-                        <th>ថ្ងៃបង្កើត</th>
-                        <th style={{ textAlign: "center" }}>សកម្មភាព</th>
+                        <th>{tu.colName}</th>
+                        <th>{tu.colShortName}</th>
+                        <th>{tu.colBaseUnit}</th>
+                        <th>{tu.colOperation}</th>
+                        <th>{tu.colCreated}</th>
+                        <th style={{ textAlign: "center" }}>{tu.colActions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -444,7 +412,7 @@ export default function UnitPage() {
                             {u.base_unit_id ? (
                               <span className="up-tag ref">#{u.base_unit_id}</span>
                             ) : (
-                              <span className="up-tag base">Base</span>
+                              <span className="up-tag base">{tu.baseBadge}</span>
                             )}
                           </td>
 
@@ -461,15 +429,15 @@ export default function UnitPage() {
 
                           <td className="up-date">{formatDate(u.created_at)}</td>
 
-                          {/* 🟢 Actions (View, Edit, Delete) */}
+                          {/* Actions (View, Edit, Delete) */}
                           <td style={{ textAlign: "center" }}>
                             <div className="up-acts">
                               <button
                                 type="button"
                                 className="up-act"
                                 onClick={() => setViewingUnit(u)}
-                                title="មើល"
-                                aria-label={`មើល ${u.name}`}
+                                title={tu.viewTitle}
+                                aria-label={`${tu.viewTitle} ${u.name}`}
                               >
                                 <Eye size={17} />
                               </button>
@@ -477,17 +445,17 @@ export default function UnitPage() {
                                 type="button"
                                 className="up-act"
                                 onClick={() => setEditingUnit(u)}
-                                title="កែប្រែ"
-                                aria-label={`កែប្រែ ${u.name}`}
+                                title={tu.editTitle}
+                                aria-label={`${tu.editTitle} ${u.name}`}
                               >
                                 <Pencil size={17} />
                               </button>
                               <button
                                 type="button"
                                 className="up-act danger"
-                                onClick={() => openDelete(u)}
-                                title="លុប"
-                                aria-label={`លុប ${u.name}`}
+                                onClick={() => handleDelete(u)}
+                                title={tu.deleteTitle}
+                                aria-label={`${tu.deleteTitle} ${u.name}`}
                               >
                                 <Trash2 size={17} />
                               </button>
@@ -503,85 +471,37 @@ export default function UnitPage() {
           </div>
         </div>
 
-        {/* 🟢 3. Modal បង្កើតឯកតាថ្មី (Create Unit) */}
+        {/* Modal បង្កើតឯកតាថ្មី */}
         <CreateUnitModal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          onSuccess={fetchUnits}
+          onSuccess={() => {
+            fetchUnits();
+            toastr.success(tu.toastCreateSuccessTitle, tu.toastCreateSuccessMsg);
+          }}
           existingUnits={units}
         />
 
-        {/* 🟢 4. Modal មើលព័ត៌មានលម្អិតឯកតា (View Unit) */}
+        {/* Modal មើលព័ត៌មានលម្អិតឯកតា */}
         <ViewUnitModal
           isOpen={Boolean(viewingUnit)}
           unit={viewingUnit}
           onClose={() => setViewingUnit(null)}
           onEdit={(u) => setEditingUnit(u)}
-          onDelete={openDelete}
+          onDelete={handleDelete}
         />
 
-        {/* 🟢 5. Modal កែប្រែឯកតា (Update Unit) */}
+        {/* Modal កែប្រែឯកតា */}
         <EditUnitModal
           isOpen={Boolean(editingUnit)}
           unit={editingUnit}
           onClose={() => setEditingUnit(null)}
-          onSuccess={fetchUnits}
+          onSuccess={() => {
+            fetchUnits();
+            toastr.success(tu.toastUpdateSuccessTitle, tu.toastUpdateSuccessMsg);
+          }}
           existingUnits={units}
         />
-
-        {/* 🟢 6. Modal បញ្ជាក់ការលុបឯកតា (Delete Confirmation Modal) */}
-        {deletingUnit && (
-          <div className="up-ovl" onClick={() => !isDeleting && setDeletingUnit(null)}>
-            <div
-              className="up-dlg"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="up-dlg-title"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="up-dlgico">
-                <AlertTriangle size={28} />
-              </div>
-
-              <h3 id="up-dlg-title">បញ្ជាក់ការលុបឯកតាទំនិញ</h3>
-              <p>
-                តើបងពិតជាចង់លុបឯកតា <strong>"{deletingUnit.name}"</strong> នេះមែនទេ?
-              </p>
-
-              {deleteError && (
-                <div className="up-derr" role="alert">
-                  {deleteError}
-                </div>
-              )}
-
-              <div className="up-dlgbtns">
-                <button
-                  type="button"
-                  className="up-btn ghost"
-                  disabled={isDeleting}
-                  onClick={() => setDeletingUnit(null)}
-                >
-                  បោះបង់
-                </button>
-                <button
-                  type="button"
-                  className="up-btn danger"
-                  disabled={isDeleting}
-                  onClick={handleConfirmDelete}
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 size={17} className="up-spin" />
-                      កំពុងលុប...
-                    </>
-                  ) : (
-                    "យល់ព្រមលុប"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

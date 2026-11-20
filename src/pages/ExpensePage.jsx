@@ -9,6 +9,8 @@ import EditExpenseModal from './expenses/EditExpenseModal';
 import ViewExpenseModal from './expenses/ViewExpenseModal';
 import CreateExpenseTypeModal from './expenses/CreateExpenseTypeModal';
 import ConfirmDeleteModal from './brands/ConfirmDeleteModal';
+import ToastrContainer, { toastr } from '../components/Toastr';
+import { useTranslation } from '../utils/translations';
 
 const PAGE_SIZE = 10;
 const css = `
@@ -61,11 +63,9 @@ const css = `
 .ex-select { height: 38px; max-width: 170px; padding: 0 30px 0 12px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: #f1f6f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a8280' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; border: 1.5px solid transparent; border-radius: 11px; appearance: none; cursor: pointer; }
 .ex-select:hover { background-color: #e9f1ef; }
 
-/* logo tile */
 .ex-logo { position: relative; width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 17px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
 .ex-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 5px; background: #fff; }
 
-/* list */
 .ex-head, .ex-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,.9fr) 112px; gap: 14px; align-items: center; padding: 0 18px; }
 .ex-head { height: 38px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: #f7fbfa; border-bottom: 1px solid var(--line); }
 .ex-row { min-height: 66px; border-bottom: 1px solid var(--line); transition: background .12s; animation: ex-slide .4s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 28ms) backwards; }
@@ -85,7 +85,6 @@ const css = `
 .ex-ib.d:hover { background: #fdecea; color: #c0392b; border-color: #f6cfca; }
 .ex-ib:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 
-/* grid */
 .ex-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px; }
 .ex-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden;
   transition: transform .22s, box-shadow .22s, border-color .22s; animation: ex-up .45s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 35ms) backwards; }
@@ -193,24 +192,21 @@ function Tile({ label, target, prefix = '', decimals = 0, icon: Icon, tone, hero
   );
 }
 
-function Actions({ onView, onEdit, onDelete }) {
+function Actions({ onView, onEdit, onDelete, te }) {
   return (
     <div className="ex-acts">
-      <button className="ex-ib v" onClick={onView} aria-label="View expense" title="មើល"><Eye size={15} /></button>
-      <button className="ex-ib e" onClick={onEdit} aria-label="Edit expense" title="កែប្រែ"><Pencil size={15} /></button>
-      <button className="ex-ib d" onClick={onDelete} aria-label="Delete expense" title="លុប"><Trash2 size={15} /></button>
+      <button className="ex-ib v" onClick={onView} aria-label="View expense" title={te.viewTitle}><Eye size={15} /></button>
+      <button className="ex-ib e" onClick={onEdit} aria-label="Edit expense" title={te.editTitle}><Pencil size={15} /></button>
+      <button className="ex-ib d" onClick={onDelete} aria-label="Delete expense" title={te.deleteTitle}><Trash2 size={15} /></button>
     </div>
   );
 }
 
-const PERIODS = [
-  { key: 'all', label: 'All time' },
-  { key: 'month', label: 'This month' },
-  { key: '30d', label: '30 days' },
-];
-
 export default function ExpensePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const te = t.expenses;
+
   const [expenses, setExpenses] = useState([]);
   const [expenseTypes, setExpenseTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -221,7 +217,6 @@ export default function ExpensePage() {
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
 
-  // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);
   const [viewingExpense, setViewingExpense] = useState(null);
@@ -245,17 +240,18 @@ export default function ExpensePage() {
       setExpenseTypes(Array.isArray(typeList) ? typeList : []);
     } catch (error) {
       console.error('Error fetching expenses:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យការចំណាយ');
+      const msg = error.message || te.fetchError;
+      setErrorMsg(msg);
+      toastr.error(te.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // ប្រភេទចំណាយពី API និងពីក្នុងតារាងចំណាយ
   const allTypes = useMemo(() => {
     const map = new Map();
-    expenseTypes.forEach((t) => { if (t?.id) map.set(t.id, t); });
-    expenses.forEach((e) => { const t = typeOf(e); if (t?.id) map.set(t.id, t); });
+    expenseTypes.forEach((tp) => { if (tp?.id) map.set(tp.id, tp); });
+    expenses.forEach((e) => { const tp = typeOf(e); if (tp?.id) map.set(tp.id, tp); });
     return Array.from(map.values());
   }, [expenseTypes, expenses]);
 
@@ -268,9 +264,12 @@ export default function ExpensePage() {
       setDeleteError('');
       await deleteExpense(deletingExpense.id);
       setDeletingExpense(null);
+      toastr.success(te.toastDeleteSuccessTitle, te.toastDeleteSuccessMsg);
       fetchData();
     } catch (err) {
-      setDeleteError(err?.message || 'បរាជ័យក្នុងការលុបការចំណាយនេះ');
+      const msg = err?.message || te.deleteError;
+      setDeleteError(msg);
+      toastr.error(te.toastErrorTitle, msg);
     } finally {
       setIsDeleting(false);
     }
@@ -285,9 +284,9 @@ export default function ExpensePage() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = expenses.filter((item) => {
-      const t = typeOf(item);
-      const typeId = item.expense_type_id ?? t.id;
-      const matchSearch = !q || [item.title, item.name, item.reference_no, item.expense_number, item.description, t.name].some((x) => x?.toLowerCase?.().includes(q));
+      const tp = typeOf(item);
+      const typeId = item.expense_type_id ?? tp.id;
+      const matchSearch = !q || [item.title, item.name, item.reference_no, item.expense_number, item.description, tp.name].some((x) => x?.toLowerCase?.().includes(q));
       return matchSearch && (selectedType === 'all' || String(typeId) === String(selectedType)) && inPeriod(item, period);
     });
     const by = {
@@ -298,17 +297,16 @@ export default function ExpensePage() {
     return [...list].sort(by);
   }, [expenses, search, selectedType, period, sort]);
 
-  // Spending by type (for the filtered list)
   const breakdown = useMemo(() => {
     const map = new Map();
-    visible.forEach((e) => { const n = typeOf(e).name || 'គ្មានប្រភេទ'; map.set(n, (map.get(n) || 0) + num(e.amount)); });
+    visible.forEach((e) => { const n = typeOf(e).name || te.noType; map.set(n, (map.get(n) || 0) + num(e.amount)); });
     const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
     const top = sorted.slice(0, 5);
     const rest = sorted.slice(5).reduce((s, x) => s + x[1], 0);
-    if (rest > 0) top.push(['Others', rest]);
+    if (rest > 0) top.push([te.others, rest]);
     const total = top.reduce((s, x) => s + x[1], 0);
     return { items: top.map(([name, amount], i) => ({ name, amount, pct: total ? (amount / total) * 100 : 0, color: COLORS[i % COLORS.length] })), total };
-  }, [visible]);
+  }, [visible, te]);
 
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const current = Math.min(page, pages);
@@ -327,36 +325,43 @@ export default function ExpensePage() {
     URL.revokeObjectURL(url);
   };
 
+  const PERIODS = [
+    { key: 'all', label: te.periodAll },
+    { key: 'month', label: te.periodMonth },
+    { key: '30d', label: te.period30d },
+  ];
+
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="ex">
         <div className="ex-top">
           <div>
-            <h2>💸 បញ្ជីការចំណាយ</h2>
-            <p>គ្រប់គ្រងរាល់ការចំណាយប្រចាំថ្ងៃ និងប្រភេទនៃការចំណាយក្នុងអាជីវកម្ម</p>
+            <h2>{te.heading}</h2>
+            <p>{te.subHeading}</p>
           </div>
           <div className="ex-actions">
-            <button className="ex-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> កត់ត្រាចំណាយថ្មី</button>
-            <button className="ex-btn" onClick={() => setIsCreateTypeOpen(true)}><FolderPlus size={16} /> ប្រភេទថ្មី</button>
-            <button className="ex-btn" onClick={() => navigate('/expense-types')}><FolderKanban size={16} /> គ្រប់គ្រងប្រភេទ</button>
-            <button className="ex-btn icon" onClick={exportCsv} disabled={visible.length === 0} aria-label="Export CSV" title="Export CSV"><Download size={16} /></button>
-            <button className="ex-btn icon" onClick={fetchData} disabled={loading} aria-label="Refresh" title="Refresh"><RefreshCw size={16} className={loading ? 'ex-spin' : ''} /></button>
+            <button className="ex-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {te.addExpense}</button>
+            <button className="ex-btn" onClick={() => setIsCreateTypeOpen(true)}><FolderPlus size={16} /> {te.addType}</button>
+            <button className="ex-btn" onClick={() => navigate('/expense-types')}><FolderKanban size={16} /> {te.manageTypes}</button>
+            <button className="ex-btn icon" onClick={exportCsv} disabled={visible.length === 0} aria-label={te.exportCsv} title={te.exportCsv}><Download size={16} /></button>
+            <button className="ex-btn icon" onClick={fetchData} disabled={loading} aria-label={te.refresh} title={te.refresh}><RefreshCw size={16} className={loading ? 'ex-spin' : ''} /></button>
           </div>
         </div>
 
-        {errorMsg && <div className="ex-err" role="alert"><span>{errorMsg}</span><button onClick={fetchData}>Try again</button></div>}
+        {errorMsg && <div className="ex-err" role="alert"><span>{errorMsg}</span><button onClick={fetchData}>{te.tryAgain}</button></div>}
 
         <div className="ex-tiles">
-          <Tile label="ទឹកប្រាក់ចំណាយសរុប" target={stats.total} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
-          <Tile label="ចំណាយខែនេះ" target={stats.month} prefix="$" decimals={2} icon={CalendarDays} tone="t-amber" delay={70} />
-          <Tile label="ចំនួនប្រតិបត្តិការ" target={stats.count} icon={Wallet} tone="t-blue" delay={140} />
-          <Tile label="ប្រភេទការចំណាយ" target={stats.types} icon={FolderKanban} tone="t-green" delay={210} />
+          <Tile label={te.tileTotal} target={stats.total} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
+          <Tile label={te.tileMonth} target={stats.month} prefix="$" decimals={2} icon={CalendarDays} tone="t-amber" delay={70} />
+          <Tile label={te.tileCount} target={stats.count} icon={Wallet} tone="t-blue" delay={140} />
+          <Tile label={te.tileTypes} target={stats.types} icon={FolderKanban} tone="t-green" delay={210} />
         </div>
 
         {!loading && breakdown.total > 0 && (
           <section className="ex-break">
-            <div className="ex-break-top"><b>ចំណាយតាមប្រភេទ</b><span>{money(breakdown.total)} សរុប</span></div>
+            <div className="ex-break-top"><b>{te.breakdownTitle}</b><span>{money(breakdown.total)} {te.breakdownTotal}</span></div>
             <div className="ex-bar" role="img" aria-label="Spending by type">
               {breakdown.items.map((it, i) => <i key={it.name} className="ex-part" style={{ width: `${it.pct}%`, background: it.color, animationDelay: `${200 + i * 90}ms` }} title={`${it.name}: ${money(it.amount)}`} />)}
             </div>
@@ -371,8 +376,8 @@ export default function ExpensePage() {
             <div className="ex-left">
               <div className="ex-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកចំណងជើង, លេខយោង, ការពិពណ៌នា…" aria-label="Search expenses" />
-                {search && <button className="ex-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={te.searchPlaceholder} aria-label="Search expenses" />
+                {search && <button className="ex-x" onClick={() => reset(setSearch)('')} aria-label={te.clearSearch}><X size={15} /></button>}
               </div>
               <div className="ex-seg" role="group" aria-label="Period">
                 {PERIODS.map((p) => <button key={p.key} className={`ex-sb${period === p.key ? ' on' : ''}`} aria-pressed={period === p.key} onClick={() => reset(setPeriod)(p.key)}>{p.label}</button>)}
@@ -380,27 +385,27 @@ export default function ExpensePage() {
             </div>
             <div className="ex-right">
               <select className="ex-select" value={selectedType} onChange={(e) => reset(setSelectedType)(e.target.value)} aria-label="Expense type">
-                <option value="all">All types</option>
-                {allTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <option value="all">{te.allTypes}</option>
+                {allTypes.map((tp) => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
               </select>
               <select className="ex-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort expenses">
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="amount">Amount: high to low</option>
+                <option value="newest">{te.sortNewest}</option>
+                <option value="oldest">{te.sortOldest}</option>
+                <option value="amount">{te.sortAmount}</option>
               </select>
             </div>
           </div>
 
           <div className="ex-head">
-            <span>Expense</span><span className="ex-hide-m">Type</span><span className="ex-hide-m ex-hide-md">Paid by</span><span style={{ textAlign: 'right' }}>Amount</span><span />
+            <span>{te.colExpense}</span><span className="ex-hide-m">{te.colType}</span><span className="ex-hide-m ex-hide-md">{te.colPaidBy}</span><span style={{ textAlign: 'right' }}>{te.colAmount}</span><span />
           </div>
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="ex-skel" key={i}><i style={{ width: 40, height: 40, borderRadius: 12 }} /><i style={{ width: '30%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="ex-empty">
-              <b>{expenses.length === 0 ? 'រកមិនឃើញទិន្នន័យការចំណាយទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {expenses.length > 0 && 'Try a different search, type or period.'}
+              <b>{expenses.length === 0 ? te.emptyNoData : te.emptyNoResult}</b>
+              {expenses.length > 0 && te.emptyHint}
             </div>
           ) : (
             <div key={`${selectedType}-${period}-${sort}-${current}`}>
@@ -410,10 +415,10 @@ export default function ExpensePage() {
                     <span className="ex-ico"><Wallet size={18} /></span>
                     <div style={{ minWidth: 0 }}><b>{titleOf(e)}</b><span className="ex-sub">{refOf(e)} · {fmtDate(dateOf(e))}</span></div>
                   </div>
-                  <div className="ex-hide-m"><span className="ex-tag">{typeOf(e).name || 'គ្មានប្រភេទ'}</span></div>
+                  <div className="ex-hide-m"><span className="ex-tag">{typeOf(e).name || te.noType}</span></div>
                   <div className="ex-hide-m ex-hide-md"><span className="ex-pay">{e.payment_method || 'cash'}</span><span className="ex-sub">{e.user?.name || 'Admin'}</span></div>
                   <span className="ex-amt">-{money(e.amount)}</span>
-                  <Actions onView={() => setViewingExpense(e)} onEdit={() => setEditingExpense(e)} onDelete={() => askDelete(e)} />
+                  <Actions onView={() => setViewingExpense(e)} onEdit={() => setEditingExpense(e)} onDelete={() => askDelete(e)} te={te} />
                 </div>
               ))}
             </div>
@@ -421,7 +426,7 @@ export default function ExpensePage() {
 
           {!loading && visible.length > 0 && (
             <div className="ex-foot">
-              <span>Showing {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} of {visible.length}</span>
+              <span>{te.showing} {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} {te.of} {visible.length}</span>
               <div className="ex-pager">
                 <button className="ex-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -432,14 +437,45 @@ export default function ExpensePage() {
         </section>
       </div>
 
-      <CreateExpenseModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={fetchData} existingTypes={allTypes} />
-      <CreateExpenseTypeModal isOpen={isCreateTypeOpen} onClose={() => setIsCreateTypeOpen(false)} onSuccess={fetchData} />
-      <ViewExpenseModal isOpen={Boolean(viewingExpense)} expense={viewingExpense} onClose={() => setViewingExpense(null)} onEdit={(x) => setEditingExpense(x)} onDelete={askDelete} />
-      <EditExpenseModal isOpen={Boolean(editingExpense)} expense={editingExpense} onClose={() => setEditingExpense(null)} onSuccess={fetchData} existingTypes={allTypes} />
+      <CreateExpenseModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={() => {
+          fetchData();
+          toastr.success(te.toastCreateSuccessTitle, te.toastCreateSuccessMsg);
+        }}
+        existingTypes={allTypes}
+      />
+      <CreateExpenseTypeModal
+        isOpen={isCreateTypeOpen}
+        onClose={() => setIsCreateTypeOpen(false)}
+        onSuccess={() => {
+          fetchData();
+          toastr.success(te.toastTypeCreatedTitle, te.toastTypeCreatedMsg);
+        }}
+      />
+      <ViewExpenseModal
+        isOpen={Boolean(viewingExpense)}
+        expense={viewingExpense}
+        onClose={() => setViewingExpense(null)}
+        onEdit={(x) => setEditingExpense(x)}
+        onDelete={askDelete}
+      />
+      <EditExpenseModal
+        isOpen={Boolean(editingExpense)}
+        expense={editingExpense}
+        onClose={() => setEditingExpense(null)}
+        onSuccess={() => {
+          fetchData();
+          toastr.success(te.toastUpdateSuccessTitle, te.toastUpdateSuccessMsg);
+        }}
+        existingTypes={allTypes}
+      />
       <ConfirmDeleteModal
         isOpen={Boolean(deletingExpense)}
-        title="បញ្ជាក់ការលុបការចំណាយ"
-        message={<>តើអ្នកពិតជាចង់លុបកំណត់ត្រាចំណាយ <b>“{deletingExpense ? titleOf(deletingExpense) : ''}”</b> នេះមែនទេ? ការលុបមិនអាចត្រឡប់វិញបានទេ។</>}
+        title={te.deleteModalTitle}
+        message={<>{te.deleteModalPrefix} <b>“{deletingExpense ? titleOf(deletingExpense) : ''}”</b> {te.deleteModalSuffix}</>}
+        confirmLabel={te.deleteModalConfirm}
         busy={isDeleting}
         error={deleteError}
         onCancel={() => setDeletingExpense(null)}

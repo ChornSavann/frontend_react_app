@@ -6,6 +6,8 @@ import Layout from '../components/Layout';
 import ViewPurchaseModal from './purchases/ViewPurchaseModal';
 import CreatePurchaseModal from './purchases/CreatePurchaseModal';
 import EditPurchaseModal from './purchases/EditPurchaseModal';
+import ToastrContainer, { toastr } from '../components/Toastr';
+import { useTranslation } from '../utils/translations';
 
 const PAGE_SIZE = 10;
 
@@ -172,19 +174,25 @@ function Avatar({ name, image }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, tp }) {
   const Icon = status === 'completed' ? CheckCircle2 : status === 'pending' ? Clock : XCircle;
-  return <span className={`pc-badge ${status}`}><Icon size={13} /> {status ? status.charAt(0).toUpperCase() + status.slice(1) : '-'}</span>;
+  const label =
+    status === 'completed'
+      ? tp.statusCompleted
+      : status === 'pending'
+      ? tp.statusPending
+      : status === 'cancelled'
+      ? tp.statusCancelled
+      : status
+      ? status.charAt(0).toUpperCase() + status.slice(1)
+      : '-';
+  return <span className={`pc-badge ${status}`}><Icon size={13} /> {label}</span>;
 }
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'cancelled', label: 'Cancelled' },
-];
-
 export default function PurchasePage() {
+  const { t } = useTranslation();
+  const tp = t.purchases;
+
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -194,7 +202,6 @@ export default function PurchasePage() {
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
 
-  // Modal states (Create, View, Edit)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingPurchase, setViewingPurchase] = useState(null);
   const [editingPurchase, setEditingPurchase] = useState(null);
@@ -208,18 +215,18 @@ export default function PurchasePage() {
       setLoading(true);
       setErrorMsg('');
       const res = await listPurchases();
-      // ទាញយក Array ពី res.data តាមទម្រង់ JSON របស់ Laravel API
       const data = res?.data || (Array.isArray(res) ? res : []);
       setPurchases(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching purchases:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យការទិញចូល');
+      const msg = error.message || tp.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tp.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // Suppliers ដែលមានស្រាប់ ទុកជា Fallback សម្រាប់ Create/Edit Modal
   const existingSuppliers = useMemo(() => {
     const map = new Map();
     purchases.forEach((p) => { if (p.supplier?.id) map.set(p.supplier.id, p.supplier); });
@@ -280,31 +287,39 @@ export default function PurchasePage() {
     URL.revokeObjectURL(url);
   };
 
+  const FILTERS = [
+    { key: 'all', label: tp.filterAll },
+    { key: 'completed', label: tp.filterCompleted },
+    { key: 'pending', label: tp.filterPending },
+    { key: 'cancelled', label: tp.filterCancelled },
+  ];
+
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="pc">
         <div className="pc-top">
           <div>
-            <h2>🛒 បញ្ជីការទិញទំនិញចូលស្តុក</h2>
-            <p>គ្រប់គ្រងវិក្កយបត្របញ្ជាទិញពីអ្នកផ្គត់ផ្គង់ និងការបន្ថែមចូលស្តុក</p>
+            <h2>{tp.heading}</h2>
+            <p>{tp.subHeading}</p>
           </div>
           <div className="pc-actions">
-            <button className="pc-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បង្កើតការទិញចូលថ្មី</button>
-            <button className="pc-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> Export CSV</button>
-            <button className="pc-btn" onClick={fetchPurchases} disabled={loading}><RefreshCw size={16} className={loading ? 'pc-spin' : ''} /> ផ្ទុកឡើងវិញ</button>
+            <button className="pc-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {tp.addNew}</button>
+            <button className="pc-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> {tp.exportCsv}</button>
+            <button className="pc-btn" onClick={fetchPurchases} disabled={loading}><RefreshCw size={16} className={loading ? 'pc-spin' : ''} /> {tp.refresh}</button>
           </div>
         </div>
 
         {errorMsg && (
-          <div className="pc-err" role="alert"><span>{errorMsg}</span><button onClick={fetchPurchases}>Try again</button></div>
+          <div className="pc-err" role="alert"><span>{errorMsg}</span><button onClick={fetchPurchases}>{tp.tryAgain}</button></div>
         )}
 
         <div className="pc-tiles">
-          <Tile label="ទឹកប្រាក់ទិញចូលសរុប" target={stats.spent} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
-          <Tile label="វិក្កយបត្រសរុប" target={stats.counts.all} icon={Receipt} tone="t-blue" delay={70} />
-          <Tile label="បរិមាណទិញចូល (ឯកតា)" target={stats.units} icon={Boxes} tone="t-violet" delay={140} />
-          <Tile label="កំពុងរង់ចាំ (Pending)" target={stats.counts.pending} icon={Clock} tone="t-amber" delay={210} />
+          <Tile label={tp.tileTotalSpent} target={stats.spent} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
+          <Tile label={tp.tileTotalInvoices} target={stats.counts.all} icon={Receipt} tone="t-blue" delay={70} />
+          <Tile label={tp.tileTotalUnits} target={stats.units} icon={Boxes} tone="t-violet" delay={140} />
+          <Tile label={tp.tilePending} target={stats.counts.pending} icon={Clock} tone="t-amber" delay={210} />
         </div>
 
         <section className="pc-panel">
@@ -312,8 +327,8 @@ export default function PurchasePage() {
             <div className="pc-left">
               <div className="pc-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកលេខវិក្កយបត្រ, អ្នកផ្គត់ផ្គង់, ទំនិញ…" aria-label="Search purchases" />
-                {search && <button className="pc-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={tp.searchPlaceholder} aria-label="Search purchases" />
+                {search && <button className="pc-x" onClick={() => reset(setSearch)('')} aria-label={tp.clearSearch}><X size={15} /></button>}
               </div>
               <div className="pc-chips" role="tablist" aria-label="Filter by status">
                 {FILTERS.map((f) => (
@@ -326,28 +341,28 @@ export default function PurchasePage() {
             <div className="pc-right">
               {payments.length > 0 && (
                 <select className="pc-select" value={payFilter} onChange={(e) => reset(setPayFilter)(e.target.value)} aria-label="Payment method">
-                  <option value="all">All payments</option>
+                  <option value="all">{tp.allPayments}</option>
                   {payments.map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}
                 </select>
               )}
               <select className="pc-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort purchases">
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="total">Total: high to low</option>
+                <option value="newest">{tp.sortNewest}</option>
+                <option value="oldest">{tp.sortOldest}</option>
+                <option value="total">{tp.sortTotal}</option>
               </select>
             </div>
           </div>
 
           <div className="pc-head">
-            <span>Invoice</span><span>Supplier</span><span className="pc-hide-m pc-hide-md">Items</span><span>Total</span><span>Status</span><span />
+            <span>{tp.colInvoice}</span><span>{tp.colSupplier}</span><span className="pc-hide-m pc-hide-md">{tp.colItems}</span><span>{tp.colTotal}</span><span>{tp.colStatus}</span><span />
           </div>
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="pc-skel" key={i}><i style={{ width: 38, height: 38, borderRadius: 11 }} /><i style={{ width: '30%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="pc-empty">
-              <b>{purchases.length === 0 ? 'រកមិនឃើញទិន្នន័យការទិញទំនិញចូលទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {purchases.length > 0 && 'Try a different search, status or payment filter.'}
+              <b>{purchases.length === 0 ? tp.emptyNoData : tp.emptyNoResult}</b>
+              {purchases.length > 0 && tp.emptyHint}
             </div>
           ) : (
             <div key={`${statusFilter}-${payFilter}-${sort}-${current}`}>
@@ -355,7 +370,7 @@ export default function PurchasePage() {
                 const items = Array.isArray(p.items) ? p.items : [];
                 const names = items.map((it) => it.product_name).filter(Boolean).join(', ');
                 const supplierName = p.supplier?.company || p.supplier?.name || '-';
-                const contact = [p.supplier?.contact_name || p.supplier?.name, p.supplier?.phone].filter(Boolean).join(' • ');
+                const contact = [p.supplier?.contact_name || p.supplier?.name, p.supplier?.phone].filter(Boolean).join(' · ');
                 const firstImg = items[0]?.product?.image_url;
                 return (
                   <div className="pc-row" key={p.id ?? i} style={{ '--i': i }}>
@@ -369,13 +384,13 @@ export default function PurchasePage() {
                     </div>
                     <div className="pc-who pc-hide-m pc-hide-md">
                       {firstImg ? <Avatar name={items[0]?.product_name} image={firstImg} /> : <span className="pc-av" style={{ background: '#eef4f2', color: '#6a8280' }}><Package size={17} /></span>}
-                      <div style={{ minWidth: 0 }}><b>{names || '-'}</b><span className="pc-sub">{items.length} items · {qtyOf(p)} units</span></div>
+                      <div style={{ minWidth: 0 }}><b>{names || '-'}</b><span className="pc-sub">{items.length} {tp.itemsLabel} · {qtyOf(p)} {tp.unitsLabel}</span></div>
                     </div>
                     <div className="pc-total"><b>{money(p.total)}</b>{p.payment_method && <span className="pc-pay">{p.payment_method}</span>}</div>
-                    <StatusBadge status={statusOf(p)} />
+                    <StatusBadge status={statusOf(p)} tp={tp} />
                     <div className="pc-acts">
-                      <button className="pc-ib v" onClick={() => setViewingPurchase(p)} aria-label="View purchase" title="មើល"><Eye size={15} /></button>
-                      <button className="pc-ib e" onClick={() => setEditingPurchase(p)} aria-label="Edit purchase" title="កែប្រែ"><Pencil size={15} /></button>
+                      <button className="pc-ib v" onClick={() => setViewingPurchase(p)} aria-label="View purchase" title={tp.viewTitle}><Eye size={15} /></button>
+                      <button className="pc-ib e" onClick={() => setEditingPurchase(p)} aria-label="Edit purchase" title={tp.editTitle}><Pencil size={15} /></button>
                     </div>
                   </div>
                 );
@@ -385,7 +400,7 @@ export default function PurchasePage() {
 
           {!loading && visible.length > 0 && (
             <div className="pc-foot">
-              <span>Showing {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} of {visible.length}</span>
+              <span>{tp.showing} {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} {tp.of} {visible.length}</span>
               <div className="pc-pager">
                 <button className="pc-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -396,9 +411,31 @@ export default function PurchasePage() {
         </section>
       </div>
 
-      <CreatePurchaseModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={fetchPurchases} existingSuppliers={existingSuppliers} />
-      <ViewPurchaseModal isOpen={Boolean(viewingPurchase)} purchase={viewingPurchase} onClose={() => setViewingPurchase(null)} onEdit={(pur) => setEditingPurchase(pur)} />
-      <EditPurchaseModal isOpen={Boolean(editingPurchase)} purchase={editingPurchase} onClose={() => setEditingPurchase(null)} onSuccess={fetchPurchases} existingSuppliers={existingSuppliers} />
+      <CreatePurchaseModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={() => {
+          fetchPurchases();
+          toastr.success(tp.toastCreateSuccessTitle, tp.toastCreateSuccessMsg);
+        }}
+        existingSuppliers={existingSuppliers}
+      />
+      <ViewPurchaseModal
+        isOpen={Boolean(viewingPurchase)}
+        purchase={viewingPurchase}
+        onClose={() => setViewingPurchase(null)}
+        onEdit={(pur) => setEditingPurchase(pur)}
+      />
+      <EditPurchaseModal
+        isOpen={Boolean(editingPurchase)}
+        purchase={editingPurchase}
+        onClose={() => setEditingPurchase(null)}
+        onSuccess={() => {
+          fetchPurchases();
+          toastr.success(tp.toastUpdateSuccessTitle, tp.toastUpdateSuccessMsg);
+        }}
+        existingSuppliers={existingSuppliers}
+      />
     </Layout>
   );
 }

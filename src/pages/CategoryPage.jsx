@@ -7,6 +7,7 @@ import CreateCategoryModal from './categories/CreateCategoryModal';
 import EditCategoryModal from './categories/EditCategoryModal';
 import ViewCategoryModal from './categories/ViewCategoryModal';
 import ConfirmDeleteModal from './brands/ConfirmDeleteModal';
+import { useTranslation } from '../utils/translations';
 
 const css = `
 .ct { --ink:#0f1f1d; --muted:#6a8280; --line:#e6eeec; --teal:#0f766e;
@@ -174,17 +175,20 @@ function Logo({ b }) {
   );
 }
 
-function Actions({ onView, onEdit, onDelete }) {
+function Actions({ onView, onEdit, onDelete, tcat }) {
   return (
     <div className="ct-acts">
-      <button className="ct-ib v" onClick={onView} aria-label="View category" title="មើល"><Eye size={15} /></button>
-      <button className="ct-ib e" onClick={onEdit} aria-label="Edit category" title="កែប្រែ"><Pencil size={15} /></button>
-      <button className="ct-ib d" onClick={onDelete} aria-label="Delete category" title="លុប"><Trash2 size={15} /></button>
+      <button className="ct-ib v" onClick={onView} aria-label="View category" title={tcat.viewTitle}><Eye size={15} /></button>
+      <button className="ct-ib e" onClick={onEdit} aria-label="Edit category" title={tcat.editTitle}><Pencil size={15} /></button>
+      <button className="ct-ib d" onClick={onDelete} aria-label="Delete category" title={tcat.deleteTitle}><Trash2 size={15} /></button>
     </div>
   );
 }
 
 export default function CategoryPage() {
+  const { t } = useTranslation();
+  const tcat = t.categories;
+
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -214,7 +218,7 @@ export default function CategoryPage() {
       setCategories(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('Error fetching categories:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យប្រភេទទំនិញ');
+      setErrorMsg(error.message || tcat.fetchError);
     } finally {
       setLoading(false);
     }
@@ -222,7 +226,6 @@ export default function CategoryPage() {
 
   const askDelete = (b) => { setDeleteError(''); setDeletingCategory(b); };
 
-  // មុខងារលុបប្រភេទទំនិញ
   const handleConfirmDelete = async () => {
     if (!deletingCategory?.id) return;
     try {
@@ -232,7 +235,7 @@ export default function CategoryPage() {
       setDeletingCategory(null);
       fetchCategories();
     } catch (err) {
-      setDeleteError(err?.message || 'បរាជ័យក្នុងការលុបប្រភេទទំនិញនេះ');
+      setDeleteError(err?.message || tcat.deleteError);
     } finally {
       setIsDeleting(false);
     }
@@ -284,23 +287,23 @@ export default function CategoryPage() {
       <div className="ct">
         <div className="ct-top">
           <div>
-            <h2>🗂️ បញ្ជីប្រភេទទំនិញ</h2>
-            <p>គ្រប់គ្រងប្រភេទទំនិញ រូបភាពតំណាង និងការពិពណ៌នាប្រភេទនីមួយៗ</p>
+            <h2>{tcat.heading}</h2>
+            <p>{tcat.subHeading}</p>
           </div>
           <div className="ct-actions">
-            <button className="ct-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បន្ថែមប្រភេទថ្មី</button>
-            <button className="ct-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> Export CSV</button>
-            <button className="ct-btn" onClick={fetchCategories} disabled={loading}><RefreshCw size={16} className={loading ? 'ct-spin' : ''} /> ផ្ទុកឡើងវិញ</button>
+            <button className="ct-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {tcat.addNew}</button>
+            <button className="ct-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> {tcat.exportCsv}</button>
+            <button className="ct-btn" onClick={fetchCategories} disabled={loading}><RefreshCw size={16} className={loading ? 'ct-spin' : ''} /> {tcat.refresh}</button>
           </div>
         </div>
 
-        {errorMsg && <div className="ct-err" role="alert"><span>{errorMsg}</span><button onClick={fetchCategories}>Try again</button></div>}
+        {errorMsg && <div className="ct-err" role="alert"><span>{errorMsg}</span><button onClick={fetchCategories}>{tcat.tryAgain}</button></div>}
 
         <div className="ct-tiles">
-          <Tile label="ប្រភេទទំនិញសរុប" target={stats.total} icon={Layers} tone="t-dark" hero delay={0} />
-          <Tile label="មានរូបភាព (Image)" target={stats.withImage} icon={ImageIcon} tone="t-green" delay={70} />
-          <Tile label="មិនទាន់មានរូបភាព" target={stats.noImage} icon={ImageOff} tone="t-amber" delay={140} />
-          <Tile label="បង្កើតខែនេះ" target={stats.fresh} icon={CalendarPlus} tone="t-blue" delay={210} />
+          <Tile label={tcat.tileTotal} target={stats.total} icon={Layers} tone="t-dark" hero delay={0} />
+          <Tile label={tcat.tileWithImage} target={stats.withImage} icon={ImageIcon} tone="t-green" delay={70} />
+          <Tile label={tcat.tileNoImage} target={stats.noImage} icon={ImageOff} tone="t-amber" delay={140} />
+          <Tile label={tcat.tileFresh} target={stats.fresh} icon={CalendarPlus} tone="t-blue" delay={210} />
         </div>
 
         <section className="ct-panel">
@@ -308,33 +311,33 @@ export default function CategoryPage() {
             <div className="ct-left">
               <div className="ct-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកឈ្មោះប្រភេទ ឬការពិពណ៌នា…" aria-label="Search categories" />
-                {search && <button className="ct-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={tcat.searchPlaceholder} aria-label="Search categories" />
+                {search && <button className="ct-x" onClick={() => reset(setSearch)('')} aria-label={tcat.clearSearch}><X size={15} /></button>}
               </div>
             </div>
             <div className="ct-right">
               <select className="ct-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort categories">
-                <option value="name">Name A–Z</option>
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
+                <option value="name">{tcat.sortName}</option>
+                <option value="newest">{tcat.sortNewest}</option>
+                <option value="oldest">{tcat.sortOldest}</option>
               </select>
               <div className="ct-seg" role="group" aria-label="View">
-                <button className={`ct-sb${view === 'grid' ? ' on' : ''}`} onClick={() => reset(setView)('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
-                <button className={`ct-sb${view === 'list' ? ' on' : ''}`} onClick={() => reset(setView)('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={16} /></button>
+                <button className={`ct-sb${view === 'grid' ? ' on' : ''}`} onClick={() => reset(setView)('grid')} aria-label={tcat.gridView} aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
+                <button className={`ct-sb${view === 'list' ? ' on' : ''}`} onClick={() => reset(setView)('list')} aria-label={tcat.listView} aria-pressed={view === 'list'}><List size={16} /></button>
               </div>
             </div>
           </div>
 
           {view === 'list' && (
-            <div className="ct-head"><span>Category</span><span className="ct-hide-m ct-hide-md">Description</span><span className="ct-hide-m">Added</span><span /></div>
+            <div className="ct-head"><span>{tcat.colCategory}</span><span className="ct-hide-m ct-hide-md">{tcat.colDescription}</span><span className="ct-hide-m">{tcat.colAdded}</span><span /></div>
           )}
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="ct-skel" key={i}><i style={{ width: 46, height: 46, borderRadius: 13 }} /><i style={{ width: '28%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="ct-empty">
-              <b>{categories.length === 0 ? 'រកមិនឃើញទិន្នន័យប្រភេទទំនិញទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {categories.length > 0 && 'Try a different name or description.'}
+              <b>{categories.length === 0 ? tcat.emptyNoData : tcat.emptyNoResult}</b>
+              {categories.length > 0 && tcat.emptyHint}
             </div>
           ) : view === 'list' ? (
             <div key={`l-${sort}-${current}`}>
@@ -342,11 +345,11 @@ export default function CategoryPage() {
                 <div className="ct-row" key={b.id ?? i} style={{ '--i': i }}>
                   <div className="ct-who" onClick={() => setViewingCategory(b)}>
                     <Logo b={b} />
-                    <div style={{ minWidth: 0 }}><b>{b.name}</b><span className="ct-sub">ID #{b.id}{b.products_count !== undefined && b.products_count !== null ? ` · ${b.products_count} products` : ''}</span></div>
+                    <div style={{ minWidth: 0 }}><b>{b.name}</b><span className="ct-sub">ID #{b.id}{b.products_count !== undefined && b.products_count !== null ? ` · ${b.products_count} ${tcat.productsLabel}` : ''}</span></div>
                   </div>
                   <div className="ct-hide-m ct-hide-md ct-desc">{b.description || '-'}</div>
                   <span className="ct-date ct-hide-m">{formatDate(b.created_at)}</span>
-                  <Actions onView={() => setViewingCategory(b)} onEdit={() => setEditingCategory(b)} onDelete={() => askDelete(b)} />
+                  <Actions onView={() => setViewingCategory(b)} onEdit={() => setEditingCategory(b)} onDelete={() => askDelete(b)} tcat={tcat} />
                 </div>
               ))}
             </div>
@@ -362,12 +365,12 @@ export default function CategoryPage() {
                     </div>
                     <div className="ct-cbody">
                       <b onClick={() => setViewingCategory(b)}>{b.name}</b>
-                      {b.products_count !== undefined && b.products_count !== null && <span className="ct-sub" style={{ marginTop: 0 }}>{b.products_count} products</span>}
-                      <div className="ct-desc">{b.description || 'គ្មានការពិពណ៌នា'}</div>
+                      {b.products_count !== undefined && b.products_count !== null && <span className="ct-sub" style={{ marginTop: 0 }}>{b.products_count} {tcat.productsLabel}</span>}
+                      <div className="ct-desc">{b.description || tcat.noDescription}</div>
                     </div>
                     <div className="ct-cfoot">
                       <span className="ct-date">{formatDate(b.created_at)}</span>
-                      <Actions onView={() => setViewingCategory(b)} onEdit={() => setEditingCategory(b)} onDelete={() => askDelete(b)} />
+                      <Actions onView={() => setViewingCategory(b)} onEdit={() => setEditingCategory(b)} onDelete={() => askDelete(b)} tcat={tcat} />
                     </div>
                   </div>
                 );
@@ -377,7 +380,7 @@ export default function CategoryPage() {
 
           {!loading && visible.length > 0 && (
             <div className="ct-foot">
-              <span>Showing {start + 1}–{Math.min(start + size, visible.length)} of {visible.length}</span>
+              <span>{tcat.showing} {start + 1}–{Math.min(start + size, visible.length)} {tcat.of} {visible.length}</span>
               <div className="ct-pager">
                 <button className="ct-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -393,9 +396,9 @@ export default function CategoryPage() {
       <EditCategoryModal isOpen={Boolean(editingCategory)} category={editingCategory} onClose={() => setEditingCategory(null)} onSuccess={fetchCategories} />
       <ConfirmDeleteModal
         isOpen={Boolean(deletingCategory)}
-        title="បញ្ជាក់ការលុបប្រភេទទំនិញ"
-        message={<>តើអ្នកពិតជាចង់លុបប្រភេទទំនិញ <b>“{deletingCategory?.name}”</b> នេះមែនទេ? ការលុបមិនអាចត្រឡប់វិញបានទេ។</>}
-        confirmLabel="យល់ព្រមលុប"
+        title={tcat.deleteModalTitle}
+        message={<>{tcat.deleteModalPrefix} <b>“{deletingCategory?.name}”</b> {tcat.deleteModalSuffix}</>}
+        confirmLabel={tcat.deleteModalConfirm}
         busy={isDeleting}
         error={deleteError}
         onCancel={() => setDeletingCategory(null)}

@@ -6,6 +6,8 @@ import { listStores, deleteStore } from "../services/storeService";
 import CreateStoreModal from "./stores/CreateStoreModal";
 import EditStoreModal from "./stores/EditStoreModal";
 import ViewStoreModal from "./stores/ViewStoreModal";
+import ToastrContainer, { toastr, sweetConfirm } from "../components/Toastr";
+import { useTranslation } from "../utils/translations";
 import {
   Search,
   Store,
@@ -17,8 +19,6 @@ import {
   Eye,
   Trash2,
   X,
-  Loader2,
-  AlertTriangle,
   Phone,
   Mail,
   MapPin,
@@ -157,38 +157,17 @@ const css = `
 .sp .sp-emptytitle { margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--ink); }
 .sp-emptytext { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
 
-/* ---------- delete dialog ---------- */
-.sp-ovl { position: fixed; inset: 0; z-index: 2100; display: flex; justify-content: center; align-items: center; padding: 20px;
-  background: rgba(15,55,51,.45); backdrop-filter: blur(4px); animation: sp-ovl .2s ease both;
-  font-family: 'Plus Jakarta Sans','Noto Sans Khmer',-apple-system,sans-serif; }
-@keyframes sp-ovl { from { opacity: 0; } to { opacity: 1; } }
-.sp-dlg { width: 100%; max-width: 430px; padding: 28px 26px 24px; text-align: center; background: #fff; border-radius: 22px; color: var(--ink); line-height: 1.6;
-  box-shadow: 0 30px 70px -20px rgba(15,55,51,.5); animation: sp-pop .32s cubic-bezier(.2,1.2,.4,1) both; }
-@keyframes sp-pop { from { opacity: 0; transform: translateY(14px) scale(.95); } to { opacity: 1; transform: none; } }
-.sp-dlgico { position: relative; width: 58px; height: 58px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; background: #fdeceb; color: #c8372d; }
-.sp-dlgico::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(200,55,45,.25); animation: sp-ring 1.8s ease-out infinite; }
-@keyframes sp-ring { from { opacity: 1; transform: scale(.9); } to { opacity: 0; transform: scale(1.25); } }
-.sp .sp-dlg h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
-.sp-dlg p { margin: 0 0 22px; font-size: 14px; color: var(--muted); line-height: 1.7; }
-.sp-dlg p strong { color: var(--ink); }
-.sp-derr { margin: -8px 0 18px; padding: 10px 12px; border-radius: 12px; text-align: left; font-size: 13px; background: #fff4f2; color: #b42318; border: 1px solid #fcd5cf; }
-.sp-dlgbtns { display: flex; gap: 10px; }
-.sp-dlgbtns .sp-btn { flex: 1; justify-content: center; }
-.sp-btn.danger { color: #fff; background: linear-gradient(135deg, #de4b3f, #b9291f); box-shadow: 0 10px 20px -8px rgba(185,41,31,.55); }
-.sp-btn.danger:hover:not(:disabled) { transform: translateY(-1px); }
-
 @media (max-width: 720px) {
   .sp-body { padding: 20px 16px 36px; }
   .sp .sp-title small { display: block; margin: 0; }
   .sp-count { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sp *, .sp *::before, .sp *::after, .sp-ovl, .sp-dlg { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .sp *, .sp *::before, .sp *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 `;
 
-/* រូបហាង — បើគ្មានរូប ឬ load មិនបាន បង្ហាញអក្សរដំបូងជំនួស (មិនពឹងលើ via.placeholder.com ទៀត) */
-function StoreAvatar({ store, onClick }) {
+function StoreAvatar({ store, onClick, viewLabel }) {
   const src = store.image_url || store.logo_url;
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -199,7 +178,7 @@ function StoreAvatar({ store, onClick }) {
       type="button"
       className="sp-avbtn"
       onClick={onClick}
-      aria-label={`មើល ${store.name}`}
+      aria-label={`${viewLabel} ${store.name}`}
     >
       {src && !failed ? (
         <img className="sp-av" src={src} alt="" onError={() => setFailed(true)} />
@@ -211,6 +190,9 @@ function StoreAvatar({ store, onClick }) {
 }
 
 export default function StorePage() {
+  const { lang, t } = useTranslation();
+  const tst = t.stores;
+
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -218,27 +200,13 @@ export default function StorePage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_WIDTH);
 
-  // 🟢 State សម្រាប់បើក/បិទ Modal ទាំង ៤ (Create, View, Edit, Delete)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingStore, setViewingStore] = useState(null);
   const [editingStore, setEditingStore] = useState(null);
-  const [deletingStore, setDeletingStore] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetchStores();
   }, []);
-
-  // បិទ Dialog លុប ដោយចុច Esc
-  useEffect(() => {
-    if (!deletingStore) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape" && !isDeleting) setDeletingStore(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deletingStore, isDeleting]);
 
   const fetchStores = async () => {
     try {
@@ -249,34 +217,35 @@ export default function StorePage() {
       setStores(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error("Error fetching stores:", error);
-      setErrorMsg(error.message || "បរាជ័យក្នុងការទាញយកទិន្នន័យហាង/សាខា");
+      const msg = error.message || tst.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tst.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const openDelete = (s) => {
-    setDeleteError("");
-    setDeletingStore(s);
-  };
+  // មុខងារលុបហាង/សាខាដោយប្រើ Sweet Confirm & Toastr
+  const handleDelete = async (store) => {
+    const confirmed = await sweetConfirm({
+      title: tst.confirmDeleteTitle,
+      text: tst.confirmDeleteText(store.name),
+      confirmText: tst.confirmDeleteBtn,
+      cancelText: tst.cancelBtn,
+      type: "danger",
+    });
 
-  // មុខងារលុបហាង (Delete Store)
-  const handleConfirmDelete = async () => {
-    if (!deletingStore?.id) return;
-    try {
-      setIsDeleting(true);
-      setDeleteError("");
-      await deleteStore(deletingStore.id);
-      setDeletingStore(null);
-      fetchStores();
-    } catch (err) {
-      setDeleteError(err?.message || "បរាជ័យក្នុងការលុបហាងនេះ");
-    } finally {
-      setIsDeleting(false);
+    if (confirmed) {
+      try {
+        await deleteStore(store.id);
+        setStores((prev) => prev.filter((item) => item.id !== store.id));
+        toastr.success(tst.toastDeleteSuccessTitle, tst.toastDeleteSuccessMsg(store.name));
+      } catch (err) {
+        toastr.error(tst.toastErrorTitle, err?.message || tst.toastDeleteErrorMsg);
+      }
     }
   };
 
-  // ច្រោះហាងតាមការ Search និង Status
   const filteredStores = useMemo(() => {
     return stores.filter((s) => {
       const q = search.trim().toLowerCase();
@@ -298,7 +267,6 @@ export default function StorePage() {
     });
   }, [stores, search, statusFilter]);
 
-  // ស្ថិតិសង្ខេបខាងលើ
   const stats = useMemo(() => {
     const total = stores.length;
     const active = stores.filter((s) => Number(s.is_active ?? 1) === 1).length;
@@ -307,15 +275,15 @@ export default function StorePage() {
   }, [stores]);
 
   const statCards = [
-    { label: "ហាងសរុប", value: stats.total, icon: Store, tone: "t1" },
-    { label: "កំពុងដំណើរការ (Active)", value: stats.active, icon: CheckCircle2, tone: "t2" },
-    { label: "ផ្អាកដំណើរការ (Inactive)", value: stats.inactive, icon: XCircle, tone: "t3" },
+    { label: tst.statTotal, value: stats.total, icon: Store, tone: "t1" },
+    { label: tst.statActive, value: stats.active, icon: CheckCircle2, tone: "t2" },
+    { label: tst.statInactive, value: stats.inactive, icon: XCircle, tone: "t3" },
   ];
 
   const filters = [
-    { key: "all", label: "ទាំងអស់", n: stats.total },
-    { key: "active", label: "កំពុងដំណើរការ", n: stats.active },
-    { key: "inactive", label: "ផ្អាក", n: stats.inactive },
+    { key: "all", label: tst.filterAll, n: stats.total },
+    { key: "active", label: tst.filterActive, n: stats.active },
+    { key: "inactive", label: tst.filterInactive, n: stats.inactive },
   ];
 
   const hasSearch = search.trim() !== "";
@@ -328,16 +296,15 @@ export default function StorePage() {
   return (
     <>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="sp">
-        {/* 🟢 1. Sidebar */}
         <Sidebar onCollapseChange={(_, width) => setSidebarWidth(width)} />
 
-        {/* 🟢 2. Main Content */}
         <div className="sp-main" style={{ marginLeft: `${sidebarWidth}px` }}>
           <Appbar />
 
           <div className="sp-body">
-            {/* 🟢 Header & Action Buttons */}
+            {/* Header & Action Buttons */}
             <div className="sp-head sp-in" style={{ "--d": 0 }}>
               <div className="sp-titlewrap">
                 <div className="sp-titleico">
@@ -345,27 +312,26 @@ export default function StorePage() {
                 </div>
                 <div>
                   <h2 className="sp-title">
-                    បញ្ជីហាង / សាខា<small>Stores</small>
+                    {tst.heading}
+                    {lang === "km" && <small>Stores</small>}
                   </h2>
-                  <p className="sp-sub">
-                    គ្រប់គ្រងសាខាហាងលក់ទំនិញ ព័ត៌មានទំនាក់ទំនង និងអាសយដ្ឋាននីមួយៗ
-                  </p>
+                  <p className="sp-sub">{tst.subHeading}</p>
                 </div>
               </div>
 
               <div className="sp-actions">
                 <button className="sp-btn ghost" onClick={fetchStores} disabled={loading}>
                   <RefreshCw size={16} className={loading ? "sp-spin" : ""} />
-                  <span>ផ្ទុកឡើងវិញ</span>
+                  <span>{tst.refresh}</span>
                 </button>
                 <button className="sp-btn primary" onClick={() => setIsCreateOpen(true)}>
                   <Plus size={17} strokeWidth={2.4} />
-                  <span>បន្ថែមហាងថ្មី</span>
+                  <span>{tst.addNew}</span>
                 </button>
               </div>
             </div>
 
-            {/* 🟢 Summary Cards */}
+            {/* Summary Cards */}
             <div className="sp-stats">
               {statCards.map((c, i) => {
                 const Icon = c.icon;
@@ -378,7 +344,7 @@ export default function StorePage() {
                       <div className="sp-statlabel">{c.label}</div>
                       <div className="sp-statnum">
                         {c.value}
-                        <small>សាខា</small>
+                        <small>{tst.branchSuffix}</small>
                       </div>
                     </div>
                   </div>
@@ -390,36 +356,36 @@ export default function StorePage() {
               <div className="sp-error" role="alert">
                 <span>{errorMsg}</span>
                 <button type="button" onClick={fetchStores}>
-                  ព្យាយាមម្តងទៀត
+                  {tst.tryAgain}
                 </button>
               </div>
             )}
 
-            {/* 🟢 Search & Status Filter + Stores Table */}
+            {/* Search & Status Filter + Stores Table */}
             <div className="sp-panel sp-in" style={{ "--d": 4 }}>
               <div className="sp-toolbar">
                 <div className="sp-search">
                   <Search size={17} />
                   <input
                     type="text"
-                    placeholder="ស្វែងរកតាមឈ្មោះ, លេខកូដ, ទូរស័ព្ទ ឬអាសយដ្ឋាន..."
+                    placeholder={tst.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="ស្វែងរកហាង"
+                    aria-label={tst.searchPlaceholder}
                   />
                   {hasSearch && (
                     <button
                       type="button"
                       className="sp-clear"
                       onClick={() => setSearch("")}
-                      aria-label="លុបការស្វែងរក"
+                      aria-label={tst.clearSearch}
                     >
                       <X size={16} />
                     </button>
                   )}
                 </div>
 
-                <div className="sp-seg" role="group" aria-label="ច្រោះតាមស្ថានភាព">
+                <div className="sp-seg" role="group" aria-label="Filter by status">
                   {filters.map((f) => (
                     <button
                       key={f.key}
@@ -436,13 +402,13 @@ export default function StorePage() {
 
                 {!loading && (
                   <div className="sp-count">
-                    បង្ហាញ <b>{filteredStores.length}</b> / {stores.length} សាខា
+                    {tst.showing} <b>{filteredStores.length}</b> / {stores.length} {tst.branchSuffix}
                   </div>
                 )}
               </div>
 
               {loading ? (
-                <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+                <div aria-busy="true">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div className="sp-skel-row" key={i}>
                       <div className="sp-skel" style={{ width: 24 }} />
@@ -460,22 +426,20 @@ export default function StorePage() {
                     <Store size={32} strokeWidth={1.7} />
                   </div>
                   <h3 className="sp-emptytitle">
-                    {hasFilter ? "រកមិនឃើញទិន្នន័យហាង/សាខាទេ" : "មិនទាន់មានហាង/សាខាទេ"}
+                    {hasFilter ? tst.emptyFilter : tst.emptyNoFilter}
                   </h3>
                   <p className="sp-emptytext">
-                    {hasFilter
-                      ? "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង ឬប្តូរស្ថានភាព"
-                      : "ចាប់ផ្តើមបង្កើតហាង/សាខាដំបូងរបស់អ្នក"}
+                    {hasFilter ? tst.emptySubFilter : tst.emptySubNoFilter}
                   </p>
                   {hasFilter ? (
                     <button className="sp-btn ghost" onClick={clearFilters}>
                       <X size={16} />
-                      <span>សម្អាតការច្រោះ</span>
+                      <span>{tst.clearFilters}</span>
                     </button>
                   ) : (
                     <button className="sp-btn primary" onClick={() => setIsCreateOpen(true)}>
                       <Plus size={17} strokeWidth={2.4} />
-                      <span>បន្ថែមហាងថ្មី</span>
+                      <span>{tst.addNew}</span>
                     </button>
                   )}
                 </div>
@@ -485,12 +449,12 @@ export default function StorePage() {
                     <thead>
                       <tr>
                         <th style={{ width: 56 }}>#</th>
-                        <th>ឈ្មោះហាង / សាខា</th>
-                        <th>លេខកូដ</th>
-                        <th>ទូរស័ព្ទ &amp; អ៊ីមែល</th>
-                        <th>អាសយដ្ឋាន</th>
-                        <th style={{ textAlign: "center" }}>ស្ថានភាព</th>
-                        <th style={{ textAlign: "center" }}>សកម្មភាព</th>
+                        <th>{tst.colStore}</th>
+                        <th>{tst.colCode}</th>
+                        <th>{tst.colPhoneEmail}</th>
+                        <th>{tst.colAddress}</th>
+                        <th style={{ textAlign: "center" }}>{tst.colStatus}</th>
+                        <th style={{ textAlign: "center" }}>{tst.colActions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -504,7 +468,11 @@ export default function StorePage() {
                             {/* Logo + Name */}
                             <td>
                               <div className="sp-store">
-                                <StoreAvatar store={store} onClick={() => setViewingStore(store)} />
+                                <StoreAvatar
+                                  store={store}
+                                  onClick={() => setViewingStore(store)}
+                                  viewLabel={tst.viewTitle}
+                                />
                                 <div>
                                   <button
                                     type="button"
@@ -556,19 +524,19 @@ export default function StorePage() {
                             {/* Status */}
                             <td style={{ textAlign: "center" }}>
                               <span className={`sp-badge ${isActive ? "on" : "off"}`}>
-                                {isActive ? "Active" : "Inactive"}
+                                {isActive ? tst.statusActive : tst.statusInactive}
                               </span>
                             </td>
 
-                            {/* 🟢 Actions (View, Edit, Delete) */}
+                            {/* Actions (View, Edit, Delete) */}
                             <td style={{ textAlign: "center" }}>
                               <div className="sp-acts">
                                 <button
                                   type="button"
                                   className="sp-act"
                                   onClick={() => setViewingStore(store)}
-                                  title="មើល"
-                                  aria-label={`មើល ${store.name}`}
+                                  title={tst.viewTitle}
+                                  aria-label={`${tst.viewTitle} ${store.name}`}
                                 >
                                   <Eye size={17} />
                                 </button>
@@ -576,17 +544,17 @@ export default function StorePage() {
                                   type="button"
                                   className="sp-act"
                                   onClick={() => setEditingStore(store)}
-                                  title="កែប្រែ"
-                                  aria-label={`កែប្រែ ${store.name}`}
+                                  title={tst.editTitle}
+                                  aria-label={`${tst.editTitle} ${store.name}`}
                                 >
                                   <Pencil size={17} />
                                 </button>
                                 <button
                                   type="button"
                                   className="sp-act danger"
-                                  onClick={() => openDelete(store)}
-                                  title="លុប"
-                                  aria-label={`លុប ${store.name}`}
+                                  onClick={() => handleDelete(store)}
+                                  title={tst.deleteTitle}
+                                  aria-label={`${tst.deleteTitle} ${store.name}`}
                                 >
                                   <Trash2 size={17} />
                                 </button>
@@ -603,83 +571,35 @@ export default function StorePage() {
           </div>
         </div>
 
-        {/* 🟢 3. Modal បង្កើតហាងថ្មី (Create Store) */}
+        {/* Modal បង្កើតហាងថ្មី */}
         <CreateStoreModal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          onSuccess={fetchStores}
+          onSuccess={() => {
+            fetchStores();
+            toastr.success(tst.toastCreateSuccessTitle, tst.toastCreateSuccessMsg);
+          }}
         />
 
-        {/* 🟢 4. Modal មើលព័ត៌មានលម្អិតហាង (View Store) */}
+        {/* Modal មើលព័ត៌មានលម្អិតហាង */}
         <ViewStoreModal
           isOpen={Boolean(viewingStore)}
           store={viewingStore}
           onClose={() => setViewingStore(null)}
           onEdit={(s) => setEditingStore(s)}
-          onDelete={openDelete}
+          onDelete={handleDelete}
         />
 
-        {/* 🟢 5. Modal កែប្រែហាង (Update Store) */}
+        {/* Modal កែប្រែហាង */}
         <EditStoreModal
           isOpen={Boolean(editingStore)}
           store={editingStore}
           onClose={() => setEditingStore(null)}
-          onSuccess={fetchStores}
+          onSuccess={() => {
+            fetchStores();
+            toastr.success(tst.toastUpdateSuccessTitle, tst.toastUpdateSuccessMsg);
+          }}
         />
-
-        {/* 🟢 6. Modal បញ្ជាក់ការលុបហាង (Delete Confirmation Modal) */}
-        {deletingStore && (
-          <div className="sp-ovl" onClick={() => !isDeleting && setDeletingStore(null)}>
-            <div
-              className="sp-dlg"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sp-dlg-title"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sp-dlgico">
-                <AlertTriangle size={28} />
-              </div>
-
-              <h3 id="sp-dlg-title">បញ្ជាក់ការលុបហាង / សាខា</h3>
-              <p>
-                តើបងពិតជាចង់លុបហាង <strong>"{deletingStore.name}"</strong> នេះមែនទេ?
-              </p>
-
-              {deleteError && (
-                <div className="sp-derr" role="alert">
-                  {deleteError}
-                </div>
-              )}
-
-              <div className="sp-dlgbtns">
-                <button
-                  type="button"
-                  className="sp-btn ghost"
-                  disabled={isDeleting}
-                  onClick={() => setDeletingStore(null)}
-                >
-                  បោះបង់
-                </button>
-                <button
-                  type="button"
-                  className="sp-btn danger"
-                  disabled={isDeleting}
-                  onClick={handleConfirmDelete}
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 size={17} className="sp-spin" />
-                      កំពុងលុប...
-                    </>
-                  ) : (
-                    "យល់ព្រមលុប"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

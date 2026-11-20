@@ -6,6 +6,8 @@ import Layout from '../components/Layout';
 import CreateCustomerModal from './customers/CreateCustomerModal';
 import EditCustomerModal from './customers/EditCustomerModal';
 import ViewCustomerModal from './customers/ViewCustomerModal';
+import ToastrContainer, { toastr } from '../components/Toastr';
+import { useTranslation } from '../utils/translations';
 
 const PAGE_SIZE = 10;
 
@@ -169,13 +171,10 @@ function Avatar({ c }) {
   );
 }
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'inactive', label: 'Inactive' },
-];
-
 export default function CustomerPage() {
+  const { t } = useTranslation();
+  const tcu = t.customers;
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -184,7 +183,6 @@ export default function CustomerPage() {
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
 
-  // Modal states (Create, View, Edit)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingCustomer, setViewingCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -202,7 +200,9 @@ export default function CustomerPage() {
       setCustomers(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('Error fetching customers:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យអតិថិជន');
+      const msg = error.message || tcu.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tcu.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
@@ -252,29 +252,36 @@ export default function CustomerPage() {
     URL.revokeObjectURL(url);
   };
 
+  const FILTERS = [
+    { key: 'all', label: tcu.filterAll },
+    { key: 'active', label: tcu.filterActive },
+    { key: 'inactive', label: tcu.filterInactive },
+  ];
+
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="cu">
         <div className="cu-top">
           <div>
-            <h2>👥 បញ្ជីអតិថិជន</h2>
-            <p>គ្រប់គ្រងព័ត៌មានអតិថិជន លេខទូរស័ព្ទ អាសយដ្ឋាន និងពិន្ទុសន្សំ</p>
+            <h2>{tcu.heading}</h2>
+            <p>{tcu.subHeading}</p>
           </div>
           <div className="cu-actions">
-            <button className="cu-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បន្ថែមអតិថិជនថ្មី</button>
-            <button className="cu-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> Export CSV</button>
-            <button className="cu-btn" onClick={fetchCustomers} disabled={loading}><RefreshCw size={16} className={loading ? 'cu-spin' : ''} /> ផ្ទុកឡើងវិញ</button>
+            <button className="cu-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {tcu.addNew}</button>
+            <button className="cu-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> {tcu.exportCsv}</button>
+            <button className="cu-btn" onClick={fetchCustomers} disabled={loading}><RefreshCw size={16} className={loading ? 'cu-spin' : ''} /> {tcu.refresh}</button>
           </div>
         </div>
 
-        {errorMsg && <div className="cu-err" role="alert"><span>{errorMsg}</span><button onClick={fetchCustomers}>Try again</button></div>}
+        {errorMsg && <div className="cu-err" role="alert"><span>{errorMsg}</span><button onClick={fetchCustomers}>{tcu.tryAgain}</button></div>}
 
         <div className="cu-tiles">
-          <Tile label="អតិថិជនសរុប" target={stats.counts.all} icon={Users} tone="t-dark" hero delay={0} />
-          <Tile label="កំពុងដំណើរការ (Active)" target={stats.counts.active} icon={CheckCircle2} tone="t-green" delay={70} />
-          <Tile label="ពិន្ទុសន្សំសរុប" target={stats.points} icon={Award} tone="t-amber" delay={140} />
-          <Tile label="ចុះឈ្មោះខែនេះ" target={stats.fresh} icon={UserPlus} tone="t-blue" delay={210} />
+          <Tile label={tcu.tileTotal} target={stats.counts.all} icon={Users} tone="t-dark" hero delay={0} />
+          <Tile label={tcu.tileActive} target={stats.counts.active} icon={CheckCircle2} tone="t-green" delay={70} />
+          <Tile label={tcu.tilePoints} target={stats.points} icon={Award} tone="t-amber" delay={140} />
+          <Tile label={tcu.tileFresh} target={stats.fresh} icon={UserPlus} tone="t-blue" delay={210} />
         </div>
 
         <section className="cu-panel">
@@ -282,8 +289,8 @@ export default function CustomerPage() {
             <div className="cu-left">
               <div className="cu-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកឈ្មោះ, ទូរស័ព្ទ, អ៊ីមែល, អាសយដ្ឋាន…" aria-label="Search customers" />
-                {search && <button className="cu-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={tcu.searchPlaceholder} aria-label="Search customers" />
+                {search && <button className="cu-x" onClick={() => reset(setSearch)('')} aria-label={tcu.clearSearch}><X size={15} /></button>}
               </div>
               <div className="cu-chips" role="tablist" aria-label="Filter by status">
                 {FILTERS.map((f) => (
@@ -295,23 +302,23 @@ export default function CustomerPage() {
             </div>
             <div className="cu-right">
               <select className="cu-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort customers">
-                <option value="newest">Newest first</option>
-                <option value="name">Name A–Z</option>
-                <option value="points">Points: high to low</option>
+                <option value="newest">{tcu.sortNewest}</option>
+                <option value="name">{tcu.sortName}</option>
+                <option value="points">{tcu.sortPoints}</option>
               </select>
             </div>
           </div>
 
           <div className="cu-head">
-            <span>Customer</span><span className="cu-hide-m">Contact</span><span className="cu-hide-m cu-hide-md">Address</span><span>Points</span><span>Status</span><span />
+            <span>{tcu.colCustomer}</span><span className="cu-hide-m">{tcu.colContact}</span><span className="cu-hide-m cu-hide-md">{tcu.colAddress}</span><span>{tcu.colPoints}</span><span>{tcu.colStatus}</span><span />
           </div>
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="cu-skel" key={i}><i style={{ width: 40, height: 40, borderRadius: '50%' }} /><i style={{ width: '28%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="cu-empty">
-              <b>{customers.length === 0 ? 'រកមិនឃើញទិន្នន័យអតិថិជនទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {customers.length > 0 && 'Try a different name, phone number or status.'}
+              <b>{customers.length === 0 ? tcu.emptyNoData : tcu.emptyNoResult}</b>
+              {customers.length > 0 && tcu.emptyHint}
             </div>
           ) : (
             <div key={`${statusFilter}-${sort}-${current}`}>
@@ -319,7 +326,7 @@ export default function CustomerPage() {
                 <div className="cu-row" key={c.id ?? i} style={{ '--i': i }}>
                   <div className="cu-who" onClick={() => setViewingCustomer(c)}>
                     <Avatar c={c} />
-                    <div style={{ minWidth: 0 }}><b>{c.name}</b><span className="cu-sub">ID #{c.id} · Joined {formatDate(c.created_at)}</span></div>
+                    <div style={{ minWidth: 0 }}><b>{c.name}</b><span className="cu-sub">ID #{c.id} · {tcu.joinedPrefix} {formatDate(c.created_at)}</span></div>
                   </div>
                   <div className="cu-contact cu-hide-m">
                     <div className="cu-line main"><Phone size={13} /><span>{c.phone || '-'}</span></div>
@@ -328,13 +335,13 @@ export default function CustomerPage() {
                   <div className="cu-hide-m cu-hide-md">
                     {c.address ? <div className="cu-line"><MapPin size={13} /><span>{c.address}</span></div> : <span className="cu-sub">-</span>}
                   </div>
-                  <span className="cu-pts"><Award size={13} />{pointsOf(c).toLocaleString('en-US')} pts</span>
+                  <span className="cu-pts"><Award size={13} />{pointsOf(c).toLocaleString('en-US')} {tcu.ptsSuffix}</span>
                   {isActive(c)
-                    ? <span className="cu-badge on"><CheckCircle2 size={13} /> Active</span>
-                    : <span className="cu-badge off"><XCircle size={13} /> Inactive</span>}
+                    ? <span className="cu-badge on"><CheckCircle2 size={13} /> {tcu.statusActive}</span>
+                    : <span className="cu-badge off"><XCircle size={13} /> {tcu.statusInactive}</span>}
                   <div className="cu-acts">
-                    <button className="cu-ib v" onClick={() => setViewingCustomer(c)} aria-label="View customer" title="មើល"><Eye size={15} /></button>
-                    <button className="cu-ib e" onClick={() => setEditingCustomer(c)} aria-label="Edit customer" title="កែប្រែ"><Pencil size={15} /></button>
+                    <button className="cu-ib v" onClick={() => setViewingCustomer(c)} aria-label="View customer" title={tcu.viewTitle}><Eye size={15} /></button>
+                    <button className="cu-ib e" onClick={() => setEditingCustomer(c)} aria-label="Edit customer" title={tcu.editTitle}><Pencil size={15} /></button>
                   </div>
                 </div>
               ))}
@@ -343,7 +350,7 @@ export default function CustomerPage() {
 
           {!loading && visible.length > 0 && (
             <div className="cu-foot">
-              <span>Showing {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} of {visible.length}</span>
+              <span>{tcu.showing} {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} {tcu.of} {visible.length}</span>
               <div className="cu-pager">
                 <button className="cu-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -354,9 +361,29 @@ export default function CustomerPage() {
         </section>
       </div>
 
-      <CreateCustomerModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={fetchCustomers} />
-      <ViewCustomerModal isOpen={Boolean(viewingCustomer)} customer={viewingCustomer} onClose={() => setViewingCustomer(null)} onEdit={(cust) => setEditingCustomer(cust)} />
-      <EditCustomerModal isOpen={Boolean(editingCustomer)} customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSuccess={fetchCustomers} />
+      <CreateCustomerModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={() => {
+          fetchCustomers();
+          toastr.success(tcu.toastCreateSuccessTitle, tcu.toastCreateSuccessMsg);
+        }}
+      />
+      <ViewCustomerModal
+        isOpen={Boolean(viewingCustomer)}
+        customer={viewingCustomer}
+        onClose={() => setViewingCustomer(null)}
+        onEdit={(cust) => setEditingCustomer(cust)}
+      />
+      <EditCustomerModal
+        isOpen={Boolean(editingCustomer)}
+        customer={editingCustomer}
+        onClose={() => setEditingCustomer(null)}
+        onSuccess={() => {
+          fetchCustomers();
+          toastr.success(tcu.toastUpdateSuccessTitle, tcu.toastUpdateSuccessMsg);
+        }}
+      />
     </Layout>
   );
 }

@@ -26,6 +26,8 @@ import {
   getMonthlyReport,
   getWeeklyReport,
 } from "../../services/reportService";
+import ToastrContainer, { toastr } from "../../components/Toastr";
+import { useTranslation } from "../../utils/translations";
 
 const PAGE_SIZE = 10;
 
@@ -270,11 +272,21 @@ select.rt-input { appearance: none; -webkit-appearance: none; padding-right: 38p
 }
 `;
 
-const KM_MONTHS = [
-  "មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា",
-  "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ",
-];
-const KM_WEEKDAYS = ["ច័ន្ទ", "អង្គារ", "ពុធ", "ព្រហស្បតិ៍", "សុក្រ", "សៅរ៍", "អាទិត្យ"];
+const MONTHS_BY_LANG = {
+  km: [
+    "មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា",
+    "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ",
+  ],
+  en: [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ],
+};
+
+const WEEKDAYS_BY_LANG = {
+  km: ["ច័ន្ទ", "អង្គារ", "ពុធ", "ព្រហស្បតិ៍", "សុក្រ", "សៅរ៍", "អាទិត្យ"],
+  en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+};
 
 const pad = (n) => String(n).padStart(2, "0");
 const toLocalISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -286,7 +298,6 @@ const fmtDateTime = (s) => {
     : d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
-// CSV៖ ការពារ "formula injection" ក្នុង Excel (ក្រឡាដែលចាប់ផ្តើមដោយ = + - @)
 const csvCell = (x) => {
   let v = String(x ?? "");
   if (/^[=+\-@\t\r]/.test(v) && Number.isNaN(Number(v))) v = `'${v}`;
@@ -337,7 +348,6 @@ function StatusBadge({ status }) {
   return <span className={`rt-badge ${["completed", "pending", "cancelled"].includes(tone) ? tone : ""}`}>{s || "-"}</span>;
 }
 
-// ប្រភេទវិក្កយបត្រ៖ បង្ហាញតាមតម្លៃពិត (មិនបង្ខំជា Dine-in ទាំងអស់ទៀត)
 function typeInfo(o) {
   const t = String(o.order_type || "").toLowerCase().replace(/[_\s]+/g, "-");
   if (t === "delivery") return { cls: "delivery", label: "Delivery", Icon: Truck };
@@ -346,7 +356,13 @@ function typeInfo(o) {
 }
 
 export default function DailyMonthlyReportPage() {
-  const [reportType, setReportType] = useState("daily"); // 'daily' | 'weekly' | 'monthly'
+  const { lang, t } = useTranslation();
+  const tr = t.dailyReports;
+
+  const monthsList = MONTHS_BY_LANG[lang] || MONTHS_BY_LANG.en;
+  const weekdaysList = WEEKDAYS_BY_LANG[lang] || WEEKDAYS_BY_LANG.en;
+
+  const [reportType, setReportType] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(toLocalISO(new Date()));
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -358,7 +374,6 @@ export default function DailyMonthlyReportPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  // State សម្រាប់ Modal វិក្កយបត្រលម្អិត (មើល / បោះពុម្ព)
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [printPending, setPrintPending] = useState(false);
 
@@ -404,9 +419,11 @@ export default function DailyMonthlyReportPage() {
     } catch (err) {
       if (id !== reqId.current) return;
       console.error("Error loading report:", err);
+      const msg = err?.message || tr.fetchError;
       setReportData([]);
       setSummary(EMPTY_SUMMARY);
-      setErrorMsg(err?.message || "បរាជ័យក្នុងការទាញយករបាយការណ៍");
+      setErrorMsg(msg);
+      toastr.error(tr.toastErrorTitle, msg);
     } finally {
       if (id === reqId.current) setLoading(false);
     }
@@ -425,7 +442,6 @@ export default function DailyMonthlyReportPage() {
     setPrintPending(true);
   };
 
-  // បិទ Modal ដោយចុច Esc
   useEffect(() => {
     if (!selectedOrder) return undefined;
     const onKey = (e) => {
@@ -435,14 +451,13 @@ export default function DailyMonthlyReportPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedOrder]);
 
-  // បោះពុម្ពបន្ទាប់ពី Modal បង្ហាញរួច
   useEffect(() => {
     if (!selectedOrder || !printPending) return undefined;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setPrintPending(false);
       window.print();
     }, 350);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [selectedOrder, printPending]);
 
   const today = new Date();
@@ -463,11 +478,11 @@ export default function DailyMonthlyReportPage() {
   let periodLabel;
   if (reportType === "daily") {
     const [y, m, d] = (selectedDate || "").split("-").map(Number);
-    periodLabel = y && m && d ? `${d} ${KM_MONTHS[m - 1]} ${y}` : "-";
+    periodLabel = y && m && d ? `${d} ${monthsList[m - 1]} ${y}` : "-";
   } else if (reportType === "weekly") {
-    periodLabel = "សប្តាហ៍នេះ";
+    periodLabel = tr.tabWeekly;
   } else {
-    periodLabel = `${KM_MONTHS[Number(selectedMonth) - 1] || selectedMonth} ${selectedYear}`;
+    periodLabel = `${monthsList[Number(selectedMonth) - 1] || selectedMonth} ${selectedYear}`;
   }
 
   const avg = summary.total_orders > 0 ? summary.total_sales / summary.total_orders : 0;
@@ -478,7 +493,7 @@ export default function DailyMonthlyReportPage() {
     else if (reportType === "monthly") n = new Date(Number(selectedYear), Number(selectedMonth), 0).getDate();
 
     const buckets = Array.from({ length: n }, (_, i) => ({
-      label: reportType === "daily" ? i : reportType === "weekly" ? KM_WEEKDAYS[i] : i + 1,
+      label: reportType === "daily" ? i : reportType === "weekly" ? weekdaysList[i] : i + 1,
       sales: 0,
       orders: 0,
     }));
@@ -488,7 +503,7 @@ export default function DailyMonthlyReportPage() {
       if (Number.isNaN(d.getTime())) return;
       let idx;
       if (reportType === "daily") idx = d.getHours();
-      else if (reportType === "weekly") idx = (d.getDay() + 6) % 7; // ចាប់ផ្តើមពីថ្ងៃច័ន្ទ
+      else if (reportType === "weekly") idx = (d.getDay() + 6) % 7;
       else idx = d.getDate() - 1;
       if (buckets[idx]) {
         buckets[idx].sales += Number(o.total_amount || 0);
@@ -502,7 +517,7 @@ export default function DailyMonthlyReportPage() {
       if (b.sales > 0 && (peak < 0 || b.sales > buckets[peak].sales)) peak = i;
     });
     return { buckets, max, peak };
-  }, [reportData, reportType, selectedMonth, selectedYear]);
+  }, [reportData, reportType, selectedMonth, selectedYear, weekdaysList]);
 
   const peakText =
     chart.peak < 0
@@ -511,10 +526,10 @@ export default function DailyMonthlyReportPage() {
         ? `${pad(chart.buckets[chart.peak].label)}:00`
         : reportType === "weekly"
           ? chart.buckets[chart.peak].label
-          : `${chart.buckets[chart.peak].label} ${KM_MONTHS[Number(selectedMonth) - 1]}`;
+          : `${chart.buckets[chart.peak].label} ${monthsList[Number(selectedMonth) - 1]}`;
   const step = reportType === "daily" ? 3 : reportType === "weekly" ? 1 : 5;
 
-  const nameOf = (o) => o.customer?.name || o.customer_name || "អតិថិជនទូទៅ";
+  const nameOf = (o) => o.customer?.name || o.customer_name || tr.walkInCustomer;
   const isWalkIn = (o) => !o.customer?.name && !o.customer_name;
 
   const visible = useMemo(() => {
@@ -526,7 +541,7 @@ export default function DailyMonthlyReportPage() {
             nameOf(o).toLowerCase().includes(q),
         )
       : reportData;
-  }, [reportData, search]);
+  }, [reportData, search, tr.walkInCustomer]);
 
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const current = Math.min(page, pages);
@@ -568,7 +583,7 @@ export default function DailyMonthlyReportPage() {
           aria-labelledby="rt-sheet-title"
           onClick={(e) => e.stopPropagation()}
         >
-          <button className="rt-close rt-noprint" onClick={closeSheet} aria-label="បិទ">
+          <button className="rt-close rt-noprint" onClick={closeSheet} aria-label={tr.closeBtn}>
             <X size={18} />
           </button>
 
@@ -577,47 +592,47 @@ export default function DailyMonthlyReportPage() {
             <div className="rt-sheethead">
               <span className="rt-sbadge">Sales Invoice</span>
               <h2 className="rt-sheettitle" id="rt-sheet-title">
-                វិក្កយបត្រលក់ទំនិញ
+                {tr.modalTitle}
               </h2>
               <p className="rt-sheetno">
-                លេខវិក្កយបត្រ៖ <b>{selectedOrder.order_number || `#${selectedOrder.id}`}</b>
+                {tr.modalInvoiceNo} <b>{selectedOrder.order_number || `#${selectedOrder.id}`}</b>
               </p>
             </div>
 
             {/* Info Grid */}
             <div className="rt-info">
               <div className="rt-infobox">
-                <h4 className="rt-infohead">ព័ត៌មានអតិថិជន</h4>
+                <h4 className="rt-infohead">{tr.customerInfoTitle}</h4>
                 <p className="rt-infoname">{nameOf(selectedOrder)}</p>
                 <p>
-                  ទូរស័ព្ទ៖ <b>{selectedOrder.customer?.phone || "N/A"}</b>
+                  {tr.phoneLabel} <b>{selectedOrder.customer?.phone || "N/A"}</b>
                 </p>
-                <p>អាសយដ្ឋាន៖ {selectedOrder.customer?.address || "N/A"}</p>
+                <p>{tr.addressLabel} {selectedOrder.customer?.address || "N/A"}</p>
               </div>
               <div className="rt-infobox">
-                <h4 className="rt-infohead">ព័ត៌មានវិក្កយបត្រ</h4>
+                <h4 className="rt-infohead">{tr.invoiceInfoTitle}</h4>
                 <p>
-                  កាលបរិច្ឆេទ៖ <b>{fmtDateTime(selectedOrder.created_at)}</b>
+                  {tr.dateLabel} <b>{fmtDateTime(selectedOrder.created_at)}</b>
                 </p>
                 <p>
-                  ប្រភេទ៖ <span className="rt-infotype">{selectedOrder.order_type || "Dine-in"}</span>
+                  {tr.typeLabel} <span className="rt-infotype">{selectedOrder.order_type || "Dine-in"}</span>
                 </p>
                 <p>
-                  ស្ថានភាព៖ <StatusBadge status={selectedOrder.status} />
+                  {tr.statusLabel} <StatusBadge status={selectedOrder.status} />
                 </p>
               </div>
             </div>
 
             {/* Items */}
-            <h4 className="rt-sec">បញ្ជីទំនិញ (Products Bought)</h4>
+            <h4 className="rt-sec">{tr.itemsListTitle}</h4>
             <table className="rt-items">
               <thead>
                 <tr>
-                  <th style={{ width: 48 }}>ល.រ</th>
-                  <th>ឈ្មោះទំនិញ</th>
-                  <th className="c">ចំនួន</th>
-                  <th className="r">តម្លៃឯកតា</th>
-                  <th className="r">សរុប</th>
+                  <th style={{ width: 48 }}>{tr.colNo}</th>
+                  <th>{tr.colProductName}</th>
+                  <th className="c">{tr.colQty}</th>
+                  <th className="r">{tr.colUnitPrice}</th>
+                  <th className="r">{tr.colItemTotal}</th>
                 </tr>
               </thead>
               <tbody>
@@ -625,7 +640,7 @@ export default function DailyMonthlyReportPage() {
                   orderDetails.map((item, i) => (
                     <tr key={item.id ?? i}>
                       <td>{i + 1}</td>
-                      <td className="pn">{item.product?.name || item.product_name || "ទំនិញ"}</td>
+                      <td className="pn">{item.product?.name || item.product_name || tr.defaultProduct}</td>
                       <td className="c qty">{Number(item.quantity)}</td>
                       <td className="r">${money(item.unit_price)}</td>
                       <td className="r sum">
@@ -636,7 +651,7 @@ export default function DailyMonthlyReportPage() {
                 ) : (
                   <tr>
                     <td colSpan="5" className="none">
-                      (គ្មានទិន្នន័យ details ភ្ជាប់មកជាមួយទេ)
+                      {tr.noDetails}
                     </td>
                   </tr>
                 )}
@@ -647,19 +662,19 @@ export default function DailyMonthlyReportPage() {
             <div className="rt-totals">
               <div className="rt-totalbox">
                 <div className="rt-trow">
-                  <span>ទឹកប្រាក់រង (Subtotal)</span>
+                  <span>{tr.subtotalLabel}</span>
                   <span>${money(selectedOrder.subtotal)}</span>
                 </div>
                 <div className={`rt-trow disc${orderDiscount > 0 ? "" : " zero"}`}>
-                  <span>បញ្ចុះតម្លៃ (Discount)</span>
+                  <span>{tr.discountLabel}</span>
                   <span>-${money(orderDiscount)}</span>
                 </div>
                 <div className="rt-trow line">
-                  <span>ពន្ធ (Tax)</span>
+                  <span>{tr.taxLabel}</span>
                   <span>${money(selectedOrder.tax_amount)}</span>
                 </div>
                 <div className="rt-grand">
-                  <span>សរុប (Total)</span>
+                  <span>{tr.grandTotalLabel}</span>
                   <b>${money(selectedOrder.total_amount)}</b>
                 </div>
               </div>
@@ -669,11 +684,11 @@ export default function DailyMonthlyReportPage() {
           {/* Modal Actions */}
           <div className="rt-sheetfoot rt-noprint">
             <button className="rt-btn ghost" onClick={closeSheet}>
-              បិទ
+              {tr.closeBtn}
             </button>
             <button className="rt-btn primary" onClick={() => window.print()}>
               <Printer size={16} />
-              <span>បោះពុម្ពវិក្កយបត្រ</span>
+              <span>{tr.printInvoiceBtn}</span>
             </button>
           </div>
         </div>
@@ -684,6 +699,7 @@ export default function DailyMonthlyReportPage() {
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="rt">
         <div className="rt-top rt-in" style={{ "--d": 0 }}>
           <div className="rt-titlewrap">
@@ -692,26 +708,27 @@ export default function DailyMonthlyReportPage() {
             </div>
             <div>
               <h2 className="rt-title">
-                របាយការណ៍ការលក់<small>Reports</small>
+                {tr.heading}
+                {lang === "km" && <small>Reports</small>}
               </h2>
-              <p className="rt-sub">តាមដានចំណូល និងបញ្ជាទិញប្រចាំថ្ងៃ ប្រចាំសប្តាហ៍ ឬប្រចាំខែ</p>
+              <p className="rt-sub">{tr.subHeading}</p>
             </div>
           </div>
           <div
             className="rt-switch"
             data-i={reportType === "daily" ? 0 : reportType === "weekly" ? 1 : 2}
             role="tablist"
-            aria-label="ប្រភេទរបាយការណ៍"
+            aria-label="Report Type"
           >
             <span className="rt-thumb" />
             <button type="button" role="tab" aria-selected={reportType === "daily"} className={reportType === "daily" ? "on" : ""} onClick={() => setReportType("daily")}>
-              ប្រចាំថ្ងៃ
+              {tr.tabDaily}
             </button>
             <button type="button" role="tab" aria-selected={reportType === "weekly"} className={reportType === "weekly" ? "on" : ""} onClick={() => setReportType("weekly")}>
-              ប្រចាំសប្តាហ៍
+              {tr.tabWeekly}
             </button>
             <button type="button" role="tab" aria-selected={reportType === "monthly"} className={reportType === "monthly" ? "on" : ""} onClick={() => setReportType("monthly")}>
-              ប្រចាំខែ
+              {tr.tabMonthly}
             </button>
           </div>
         </div>
@@ -723,22 +740,22 @@ export default function DailyMonthlyReportPage() {
           <div className="rt-fields">
             {reportType === "daily" && (
               <div className="rt-field">
-                <label htmlFor="rt-date">ជ្រើសរើសថ្ងៃ</label>
+                <label htmlFor="rt-date">{tr.selectDate}</label>
                 <input id="rt-date" className="rt-input" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
               </div>
             )}
             {reportType === "weekly" && (
               <div className="rt-field">
-                <label htmlFor="rt-week">អំឡុងពេល</label>
-                <input id="rt-week" className="rt-input" type="text" value="សប្តាហ៍នេះ (Current Week)" disabled />
+                <label htmlFor="rt-week">{tr.periodLabel}</label>
+                <input id="rt-week" className="rt-input" type="text" value={tr.currentWeek} disabled />
               </div>
             )}
             {reportType === "monthly" && (
               <>
                 <div className="rt-field">
-                  <label htmlFor="rt-month">ខែ</label>
+                  <label htmlFor="rt-month">{tr.monthLabel}</label>
                   <select id="rt-month" className="rt-input" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
-                    {KM_MONTHS.map((name, i) => (
+                    {monthsList.map((name, i) => (
                       <option key={i + 1} value={i + 1}>
                         {name} ({i + 1})
                       </option>
@@ -746,7 +763,7 @@ export default function DailyMonthlyReportPage() {
                   </select>
                 </div>
                 <div className="rt-field">
-                  <label htmlFor="rt-year">ឆ្នាំ</label>
+                  <label htmlFor="rt-year">{tr.yearLabel}</label>
                   <select id="rt-year" className="rt-input" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
                     {years.map((y) => (
                       <option key={y} value={y}>
@@ -759,24 +776,24 @@ export default function DailyMonthlyReportPage() {
             )}
           </div>
 
-          <div className="rt-quick" aria-label="ជម្រើសរហ័ស">
+          <div className="rt-quick" aria-label="Quick filters">
             {reportType === "daily" && (
               <>
                 <button type="button" className={`rt-q${selectedDate === todayISO ? " on" : ""}`} onClick={() => setSelectedDate(todayISO)}>
-                  ថ្ងៃនេះ
+                  {tr.todayBtn}
                 </button>
                 <button type="button" className={`rt-q${selectedDate === yesterdayISO ? " on" : ""}`} onClick={() => setSelectedDate(yesterdayISO)}>
-                  ម្សិលមិញ
+                  {tr.yesterdayBtn}
                 </button>
               </>
             )}
             {reportType === "monthly" && (
               <>
                 <button type="button" className={`rt-q${isMonth(thisMonth) ? " on" : ""}`} onClick={() => setMonthYear(thisMonth)}>
-                  ខែនេះ
+                  {tr.thisMonthBtn}
                 </button>
                 <button type="button" className={`rt-q${isMonth(prevMonth) ? " on" : ""}`} onClick={() => setMonthYear(prevMonth)}>
-                  ខែមុន
+                  {tr.lastMonthBtn}
                 </button>
               </>
             )}
@@ -785,11 +802,11 @@ export default function DailyMonthlyReportPage() {
           <div className="rt-fright">
             <button type="button" className="rt-btn ghost" onClick={exportCsv} disabled={visible.length === 0}>
               <Download size={16} />
-              <span>Export CSV</span>
+              <span>{tr.exportCsv}</span>
             </button>
             <button type="button" className="rt-btn primary" onClick={fetchReportData} disabled={loading}>
               <RefreshCw size={16} className={loading ? "rt-spin" : ""} />
-              <span>ផ្ទុកទិន្នន័យ</span>
+              <span>{tr.loadData}</span>
             </button>
           </div>
         </section>
@@ -798,17 +815,17 @@ export default function DailyMonthlyReportPage() {
           <div className="rt-err" role="alert">
             <span>{errorMsg}</span>
             <button type="button" onClick={fetchReportData}>
-              ព្យាយាមម្តងទៀត
+              {tr.tryAgain}
             </button>
           </div>
         )}
 
         <div className="rt-tiles">
-          <Tile label="ចំណូលសរុប (Total Sales)" target={summary.total_sales} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
-          <Tile label="ចំនួនវិក្កយបត្រ (Orders)" target={summary.total_orders} icon={ShoppingCart} tone="t-blue" delay={70} />
-          <Tile label="មធ្យមក្នុងមួយវិក្កយបត្រ" target={avg} prefix="$" decimals={2} icon={TrendingUp} tone="t-leaf" delay={140} />
+          <Tile label={tr.tileTotalSales} target={summary.total_sales} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
+          <Tile label={tr.tileTotalOrders} target={summary.total_orders} icon={ShoppingCart} tone="t-blue" delay={70} />
+          <Tile label={tr.tileAvgOrder} target={avg} prefix="$" decimals={2} icon={TrendingUp} tone="t-leaf" delay={140} />
           <Tile
-            label={reportType === "daily" ? "ម៉ោងលក់ដាច់បំផុត" : reportType === "weekly" ? "ថ្ងៃលក់ដាច់បំផុតប្រចាំសប្តាហ៍" : "ថ្ងៃលក់ដាច់បំផុត"}
+            label={reportType === "daily" ? tr.tilePeakHour : reportType === "weekly" ? tr.tilePeakWeekDay : tr.tilePeakDay}
             text={peakText}
             icon={Flame}
             tone="t-amber"
@@ -818,7 +835,7 @@ export default function DailyMonthlyReportPage() {
 
         <section className="rt-chart rt-in" style={{ "--d": 3 }}>
           <div className="rt-chart-top">
-            <b>{reportType === "daily" ? "ការលក់តាមម៉ោង" : reportType === "weekly" ? "ការលក់តាមថ្ងៃក្នុងសប្តាហ៍" : "ការលក់តាមថ្ងៃ"}</b>
+            <b>{reportType === "daily" ? tr.chartHourly : reportType === "weekly" ? tr.chartWeekly : tr.chartDaily}</b>
             <span className="rt-period">
               <Calendar size={13} />
               {periodLabel}
@@ -829,14 +846,14 @@ export default function DailyMonthlyReportPage() {
               <div className="rt-skel" style={{ width: "100%", height: "100%", borderRadius: 12 }} />
             </div>
           ) : chart.max === 0 ? (
-            <div className="rt-chart-empty">មិនមានទិន្នន័យសម្រាប់បង្ហាញក្រាហ្វ</div>
+            <div className="rt-chart-empty">{tr.chartEmpty}</div>
           ) : (
             <div key={`${reportType}-${selectedDate}-${selectedMonth}-${selectedYear}`}>
               <div className="rt-bars" aria-label="Sales chart">
                 <span className="rt-max">${money(chart.max)}</span>
                 {chart.buckets.map((b, i) => {
                   const pct = b.sales > 0 ? Math.max((b.sales / chart.max) * 100, 4) : 0;
-                  const tip = `${reportType === "daily" ? `${pad(b.label)}:00` : b.label} · $${money(b.sales)} · ${b.orders} វិក្កយបត្រ`;
+                  const tip = `${reportType === "daily" ? `${pad(b.label)}:00` : b.label} · $${money(b.sales)} · ${b.orders} ${tr.invoicesUnit}`;
                   return (
                     <div className="rt-col" key={b.label} style={{ "--h": `${pct}%`, "--bi": i }} title={tip}>
                       <i className={`rt-bar${i === chart.peak ? " peak" : ""}${b.sales === 0 ? " zero" : ""}`} />
@@ -858,10 +875,10 @@ export default function DailyMonthlyReportPage() {
         <section className="rt-panel rt-in" style={{ "--d": 4 }}>
           <div className="rt-tools">
             <div className="rt-left">
-              <h3 className="rt-ptitle">បញ្ជីវិក្កយបត្រ</h3>
+              <h3 className="rt-ptitle">{tr.tableTitle}</h3>
               {!loading && (
                 <span className="rt-count">
-                  សរុប <b>{visible.length}</b> វិក្កយបត្រ
+                  {tr.totalPrefix} <b>{visible.length}</b> {tr.invoicesUnit}
                 </span>
               )}
             </div>
@@ -873,8 +890,8 @@ export default function DailyMonthlyReportPage() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                placeholder="ស្វែងរកលេខវិក្កយបត្រ ឬអតិថិជន…"
-                aria-label="ស្វែងរកវិក្កយបត្រ"
+                placeholder={tr.searchPlaceholder}
+                aria-label={tr.searchPlaceholder}
               />
               {search && (
                 <button
@@ -884,7 +901,7 @@ export default function DailyMonthlyReportPage() {
                     setSearch("");
                     setPage(1);
                   }}
-                  aria-label="លុបការស្វែងរក"
+                  aria-label={tr.clearSearch}
                 >
                   <X size={16} />
                 </button>
@@ -893,7 +910,7 @@ export default function DailyMonthlyReportPage() {
           </div>
 
           {loading ? (
-            <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+            <div aria-busy="true">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div className="rt-skelrow" key={i}>
                   <i className="rt-skel" style={{ width: 110 }} />
@@ -907,21 +924,21 @@ export default function DailyMonthlyReportPage() {
               <div className="rt-emptyico">
                 <FileText size={32} strokeWidth={1.7} />
               </div>
-              <b>{reportData.length === 0 ? "មិនមានទិន្នន័យការលក់ទេ" : "រកមិនឃើញលទ្ធផល"}</b>
-              {reportData.length === 0 ? `មិនមានវិក្កយបត្រសម្រាប់ ${periodLabel}` : "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង"}
+              <b>{reportData.length === 0 ? tr.emptyNoData : tr.emptyNoResult}</b>
+              {reportData.length === 0 ? tr.emptyNoDataSub(periodLabel) : tr.emptyNoResultSub}
             </div>
           ) : (
             <div className="rt-tablewrap">
               <div className="rt-gridwrap">
                 <div className="rt-head">
-                  <span>Order</span>
-                  <span>Customer</span>
-                  <span>Type</span>
-                  <span>Status</span>
-                  <span style={{ textAlign: "right" }}>Subtotal</span>
-                  <span style={{ textAlign: "right" }}>Total</span>
-                  <span>Date</span>
-                  <span style={{ textAlign: "center" }}>Actions</span>
+                  <span>{tr.colOrder}</span>
+                  <span>{tr.colCustomer}</span>
+                  <span>{tr.colType}</span>
+                  <span>{tr.colStatus}</span>
+                  <span style={{ textAlign: "right" }}>{tr.colSubtotal}</span>
+                  <span style={{ textAlign: "right" }}>{tr.colTotal}</span>
+                  <span>{tr.colDate}</span>
+                  <span style={{ textAlign: "center" }}>{tr.colActions}</span>
                 </div>
                 <div key={`${current}-${reportType}`}>
                   {rows.map((o, i) => {
@@ -944,7 +961,7 @@ export default function DailyMonthlyReportPage() {
                             openView(o);
                           }
                         }}
-                        title="ចុចដើម្បីមើលវិក្កយបត្រ"
+                        title={tr.rowClickTitle}
                       >
                         <span>
                           <span className="rt-inv" title={label}>
@@ -975,8 +992,8 @@ export default function DailyMonthlyReportPage() {
                               e.stopPropagation();
                               openView(o);
                             }}
-                            title="មើល"
-                            aria-label={`មើលវិក្កយបត្រ ${label}`}
+                            title={tr.viewTitle}
+                            aria-label={`${tr.viewTitle} ${label}`}
                           >
                             <Eye size={17} />
                           </button>
@@ -987,8 +1004,8 @@ export default function DailyMonthlyReportPage() {
                               e.stopPropagation();
                               openPrint(o);
                             }}
-                            title="បោះពុម្ព"
-                            aria-label={`បោះពុម្ពវិក្កយបត្រ ${label}`}
+                            title={tr.printTitle}
+                            aria-label={`${tr.printTitle} ${label}`}
                           >
                             <Printer size={17} />
                           </button>
@@ -1004,16 +1021,16 @@ export default function DailyMonthlyReportPage() {
           {!loading && visible.length > 0 && (
             <div className="rt-foot">
               <span>
-                បង្ហាញ <b>{start + 1}–{Math.min(start + PAGE_SIZE, visible.length)}</b> ក្នុងចំណោម <b>{visible.length}</b>
+                {tr.showing} <b>{start + 1}–{Math.min(start + PAGE_SIZE, visible.length)}</b> {tr.of} <b>{visible.length}</b>
               </span>
               <div className="rt-pager">
-                <button className="rt-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="ទំព័រមុន">
+                <button className="rt-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page">
                   <ChevronLeft size={18} />
                 </button>
                 <span aria-live="polite">
                   {current} / {pages}
                 </span>
-                <button className="rt-pg" onClick={() => setPage(current + 1)} disabled={current === pages} aria-label="ទំព័របន្ទាប់">
+                <button className="rt-pg" onClick={() => setPage(current + 1)} disabled={current === pages} aria-label="Next page">
                   <ChevronRight size={18} />
                 </button>
               </div>

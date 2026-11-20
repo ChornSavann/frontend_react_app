@@ -8,6 +8,8 @@ import CreateExpenseTypeModal from './expenses/CreateExpenseTypeModal';
 import EditExpenseTypeModal from './expenses/EditExpenseTypeModal';
 import ViewExpenseTypeModal from './expenses/ViewExpenseTypeModal';
 import ConfirmDeleteModal from './brands/ConfirmDeleteModal';
+import ToastrContainer, { toastr } from '../components/Toastr';
+import { useTranslation } from '../utils/translations';
 
 const PAGE_SIZE = 10;
 const css = `
@@ -60,11 +62,9 @@ const css = `
 .et-select { height: 38px; max-width: 170px; padding: 0 30px 0 12px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: #f1f6f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a8280' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; border: 1.5px solid transparent; border-radius: 11px; appearance: none; cursor: pointer; }
 .et-select:hover { background-color: #e9f1ef; }
 
-/* logo tile */
 .et-logo { position: relative; width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 17px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
 .et-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 5px; background: #fff; }
 
-/* list */
 .et-head, .et-row { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,2.2fr) minmax(0,.8fr) minmax(0,.8fr) 112px; gap: 14px; align-items: center; padding: 0 18px; }
 .et-head { height: 38px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: #f7fbfa; border-bottom: 1px solid var(--line); }
 .et-row { min-height: 66px; border-bottom: 1px solid var(--line); transition: background .12s; animation: et-slide .4s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 28ms) backwards; }
@@ -84,7 +84,6 @@ const css = `
 .et-ib.d:hover { background: #fdecea; color: #c0392b; border-color: #f6cfca; }
 .et-ib:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 
-/* grid */
 .et-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px; }
 .et-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden;
   transition: transform .22s, box-shadow .22s, border-color .22s; animation: et-up .45s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 35ms) backwards; }
@@ -170,14 +169,11 @@ function Tile({ label, target, icon: Icon, tone, hero, delay }) {
   );
 }
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'inactive', label: 'Inactive' },
-];
-
 export default function ExpenseTypePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const tet = t.expenseTypes;
+
   const [expenseTypes, setExpenseTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -205,13 +201,15 @@ export default function ExpenseTypePage() {
       setExpenseTypes(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('Error fetching expense types:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកប្រភេទការចំណាយ');
+      const msg = error.message || tet.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tet.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const askDelete = (t) => { setDeleteError(''); setDeletingType(t); };
+  const askDelete = (item) => { setDeleteError(''); setDeletingType(item); };
 
   const handleConfirmDelete = async () => {
     if (!deletingType?.id) return;
@@ -220,9 +218,12 @@ export default function ExpenseTypePage() {
       setDeleteError('');
       await deleteExpenseType(deletingType.id);
       setDeletingType(null);
+      toastr.success(tet.toastDeleteSuccessTitle, tet.toastDeleteSuccessMsg);
       fetchExpenseTypes();
     } catch (err) {
-      setDeleteError(err?.message || 'បរាជ័យក្នុងការលុបប្រភេទការចំណាយនេះ');
+      const msg = err?.message || tet.deleteError;
+      setDeleteError(msg);
+      toastr.error(tet.toastErrorTitle, msg);
     } finally {
       setIsDeleting(false);
     }
@@ -231,9 +232,9 @@ export default function ExpenseTypePage() {
   const stats = useMemo(() => {
     const now = new Date();
     let active = 0, fresh = 0;
-    expenseTypes.forEach((t) => {
-      if (isActive(t)) active += 1;
-      const d = new Date(t.created_at);
+    expenseTypes.forEach((item) => {
+      if (isActive(item)) active += 1;
+      const d = new Date(item.created_at);
       if (!Number.isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) fresh += 1;
     });
     return { counts: { all: expenseTypes.length, active, inactive: expenseTypes.length - active }, fresh };
@@ -242,7 +243,7 @@ export default function ExpenseTypePage() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return expenseTypes
-      .filter((t) => (!q || t.name?.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q)) && (filter === 'all' || (filter === 'active') === isActive(t)))
+      .filter((item) => (!q || item.name?.toLowerCase().includes(q) || item.description?.toLowerCase().includes(q)) && (filter === 'all' || (filter === 'active') === isActive(item)))
       .sort((a, b) => String(a.name).localeCompare(String(b.name)));
   }, [expenseTypes, search, filter]);
 
@@ -252,29 +253,36 @@ export default function ExpenseTypePage() {
   const rows = visible.slice(start, start + PAGE_SIZE);
   const reset = (fn) => (v) => { fn(v); setPage(1); };
 
+  const FILTERS = [
+    { key: 'all', label: tet.filterAll },
+    { key: 'active', label: tet.filterActive },
+    { key: 'inactive', label: tet.filterInactive },
+  ];
+
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="et">
         <div className="et-top">
           <div>
-            <h2>📂 ប្រភេទការចំណាយ</h2>
-            <p>គ្រប់គ្រងចំណាត់ថ្នាក់នៃការចំណាយប្រចាំថ្ងៃក្នុងហាង</p>
+            <h2>{tet.heading}</h2>
+            <p>{tet.subHeading}</p>
           </div>
           <div className="et-actions">
-            <button className="et-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បន្ថែមប្រភេទថ្មី</button>
-            <button className="et-btn" onClick={() => navigate('/expenses')}><ArrowLeft size={16} /> ទៅកាន់បញ្ជីការចំណាយ</button>
-            <button className="et-btn icon" onClick={fetchExpenseTypes} disabled={loading} aria-label="Refresh" title="Refresh"><RefreshCw size={16} className={loading ? 'et-spin' : ''} /></button>
+            <button className="et-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {tet.addNew}</button>
+            <button className="et-btn" onClick={() => navigate('/expenses')}><ArrowLeft size={16} /> {tet.backToExpenses}</button>
+            <button className="et-btn icon" onClick={fetchExpenseTypes} disabled={loading} aria-label={tet.refresh} title={tet.refresh}><RefreshCw size={16} className={loading ? 'et-spin' : ''} /></button>
           </div>
         </div>
 
-        {errorMsg && <div className="et-err" role="alert"><span>{errorMsg}</span><button onClick={fetchExpenseTypes}>Try again</button></div>}
+        {errorMsg && <div className="et-err" role="alert"><span>{errorMsg}</span><button onClick={fetchExpenseTypes}>{tet.tryAgain}</button></div>}
 
         <div className="et-tiles">
-          <Tile label="ប្រភេទសរុប" target={stats.counts.all} icon={FolderKanban} tone="t-dark" hero delay={0} />
-          <Tile label="កំពុងដំណើរការ (Active)" target={stats.counts.active} icon={CheckCircle2} tone="t-green" delay={70} />
-          <Tile label="ផ្អាកដំណើរការ" target={stats.counts.inactive} icon={XCircle} tone="t-amber" delay={140} />
-          <Tile label="បង្កើតខែនេះ" target={stats.fresh} icon={CalendarPlus} tone="t-blue" delay={210} />
+          <Tile label={tet.tileTotal} target={stats.counts.all} icon={FolderKanban} tone="t-dark" hero delay={0} />
+          <Tile label={tet.tileActive} target={stats.counts.active} icon={CheckCircle2} tone="t-green" delay={70} />
+          <Tile label={tet.tileInactive} target={stats.counts.inactive} icon={XCircle} tone="t-amber" delay={140} />
+          <Tile label={tet.tileFresh} target={stats.fresh} icon={CalendarPlus} tone="t-blue" delay={210} />
         </div>
 
         <section className="et-panel">
@@ -282,8 +290,8 @@ export default function ExpenseTypePage() {
             <div className="et-left">
               <div className="et-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកឈ្មោះប្រភេទ ឬការពិពណ៌នា…" aria-label="Search expense types" />
-                {search && <button className="et-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={tet.searchPlaceholder} aria-label="Search expense types" />
+                {search && <button className="et-x" onClick={() => reset(setSearch)('')} aria-label={tet.clearSearch}><X size={15} /></button>}
               </div>
               <div className="et-seg" role="group" aria-label="Status">
                 {FILTERS.map((f) => <button key={f.key} className={`et-sb${filter === f.key ? ' on' : ''}`} aria-pressed={filter === f.key} onClick={() => reset(setFilter)(f.key)}>{f.label} <span style={{ opacity: .6 }}>{stats.counts[f.key]}</span></button>)}
@@ -291,30 +299,30 @@ export default function ExpenseTypePage() {
             </div>
           </div>
 
-          <div className="et-head"><span>Type</span><span className="et-hide-m et-hide-md">Description</span><span className="et-hide-m">Created</span><span>Status</span><span /></div>
+          <div className="et-head"><span>{tet.colType}</span><span className="et-hide-m et-hide-md">{tet.colDescription}</span><span className="et-hide-m">{tet.colCreated}</span><span>{tet.colStatus}</span><span /></div>
 
           {loading ? (
             [0, 1, 2, 3, 4].map((i) => <div className="et-skel" key={i}><i style={{ width: 40, height: 40, borderRadius: 12 }} /><i style={{ width: '28%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="et-empty">
-              <b>{expenseTypes.length === 0 ? 'រកមិនឃើញទិន្នន័យប្រភេទការចំណាយទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {expenseTypes.length > 0 && 'Try a different name or status.'}
+              <b>{expenseTypes.length === 0 ? tet.emptyNoData : tet.emptyNoResult}</b>
+              {expenseTypes.length > 0 && tet.emptyHint}
             </div>
           ) : (
             <div key={`${filter}-${current}`}>
-              {rows.map((t, i) => (
-                <div className="et-row" key={t.id ?? i} style={{ '--i': i }}>
-                  <div className="et-who" onClick={() => setViewingType(t)}>
+              {rows.map((item, i) => (
+                <div className="et-row" key={item.id ?? i} style={{ '--i': i }}>
+                  <div className="et-who" onClick={() => setViewingType(item)}>
                     <span className="et-ico"><FolderKanban size={18} /></span>
-                    <div style={{ minWidth: 0 }}><b>{t.name}</b><span className="et-sub">ID #{t.id}{t.expenses_count !== undefined && t.expenses_count !== null ? ` · ${t.expenses_count} expenses` : ''}</span></div>
+                    <div style={{ minWidth: 0 }}><b>{item.name}</b><span className="et-sub">ID #{item.id}{item.expenses_count !== undefined && item.expenses_count !== null ? ` · ${item.expenses_count} ${tet.expensesLabel}` : ''}</span></div>
                   </div>
-                  <div className="et-hide-m et-hide-md et-desc">{t.description || '-'}</div>
-                  <span className="et-date et-hide-m">{fmtDate(t.created_at)}</span>
-                  {isActive(t) ? <span className="et-badge on"><CheckCircle2 size={13} /> Active</span> : <span className="et-badge off"><XCircle size={13} /> Inactive</span>}
+                  <div className="et-hide-m et-hide-md et-desc">{item.description || '-'}</div>
+                  <span className="et-date et-hide-m">{fmtDate(item.created_at)}</span>
+                  {isActive(item) ? <span className="et-badge on"><CheckCircle2 size={13} /> {tet.statusActive}</span> : <span className="et-badge off"><XCircle size={13} /> {tet.statusInactive}</span>}
                   <div className="et-acts">
-                    <button className="et-ib v" onClick={() => setViewingType(t)} aria-label="View type" title="មើល"><Eye size={15} /></button>
-                    <button className="et-ib e" onClick={() => setEditingType(t)} aria-label="Edit type" title="កែប្រែ"><Pencil size={15} /></button>
-                    <button className="et-ib d" onClick={() => askDelete(t)} aria-label="Delete type" title="លុប"><Trash2 size={15} /></button>
+                    <button className="et-ib v" onClick={() => setViewingType(item)} aria-label="View type" title={tet.viewTitle}><Eye size={15} /></button>
+                    <button className="et-ib e" onClick={() => setEditingType(item)} aria-label="Edit type" title={tet.editTitle}><Pencil size={15} /></button>
+                    <button className="et-ib d" onClick={() => askDelete(item)} aria-label="Delete type" title={tet.deleteTitle}><Trash2 size={15} /></button>
                   </div>
                 </div>
               ))}
@@ -323,7 +331,7 @@ export default function ExpenseTypePage() {
 
           {!loading && visible.length > 0 && (
             <div className="et-foot">
-              <span>Showing {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} of {visible.length}</span>
+              <span>{tet.showing} {start + 1}–{Math.min(start + PAGE_SIZE, visible.length)} {tet.of} {visible.length}</span>
               <div className="et-pager">
                 <button className="et-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
@@ -334,13 +342,35 @@ export default function ExpenseTypePage() {
         </section>
       </div>
 
-      <CreateExpenseTypeModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={fetchExpenseTypes} />
-      <ViewExpenseTypeModal isOpen={Boolean(viewingType)} expenseType={viewingType} onClose={() => setViewingType(null)} onEdit={(t) => setEditingType(t)} onDelete={askDelete} />
-      <EditExpenseTypeModal isOpen={Boolean(editingType)} expenseType={editingType} onClose={() => setEditingType(null)} onSuccess={fetchExpenseTypes} />
+      <CreateExpenseTypeModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={() => {
+          fetchExpenseTypes();
+          toastr.success(tet.toastCreateSuccessTitle, tet.toastCreateSuccessMsg);
+        }}
+      />
+      <ViewExpenseTypeModal
+        isOpen={Boolean(viewingType)}
+        expenseType={viewingType}
+        onClose={() => setViewingType(null)}
+        onEdit={(item) => setEditingType(item)}
+        onDelete={askDelete}
+      />
+      <EditExpenseTypeModal
+        isOpen={Boolean(editingType)}
+        expenseType={editingType}
+        onClose={() => setEditingType(null)}
+        onSuccess={() => {
+          fetchExpenseTypes();
+          toastr.success(tet.toastUpdateSuccessTitle, tet.toastUpdateSuccessMsg);
+        }}
+      />
       <ConfirmDeleteModal
         isOpen={Boolean(deletingType)}
-        title="បញ្ជាក់ការលុបប្រភេទការចំណាយ"
-        message={<>តើអ្នកពិតជាចង់លុបប្រភេទចំណាយ <b>“{deletingType?.name}”</b> នេះមែនទេ? ការលុបមិនអាចត្រឡប់វិញបានទេ។</>}
+        title={tet.deleteModalTitle}
+        message={<>{tet.deleteModalPrefix} <b>“{deletingType?.name}”</b> {tet.deleteModalSuffix}</>}
+        confirmLabel={tet.deleteModalConfirm}
         busy={isDeleting}
         error={deleteError}
         onCancel={() => setDeletingType(null)}

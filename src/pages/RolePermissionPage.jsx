@@ -8,6 +8,8 @@ import EditRoleModal from './roles/EditRoleModal';
 import ViewRoleModal from './roles/ViewRoleModal';
 import PermissionListModal from './roles/PermissionListModal';
 import ConfirmDeleteModal from './brands/ConfirmDeleteModal';
+import ToastrContainer, { toastr } from '../components/Toastr';
+import { useTranslation } from '../utils/translations';
 
 const css = `
 .ro { --ink:#0f1f1d; --muted:#6a8280; --line:#e6eeec; --teal:#0f766e;
@@ -59,11 +61,9 @@ const css = `
 .ro-select { height: 38px; max-width: 170px; padding: 0 30px 0 12px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: #f1f6f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a8280' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; border: 1.5px solid transparent; border-radius: 11px; appearance: none; cursor: pointer; }
 .ro-select:hover { background-color: #e9f1ef; }
 
-/* logo tile */
 .ro-logo { position: relative; width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; font-weight: 800; font-size: 17px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
 .ro-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 5px; background: #fff; }
 
-/* list */
 .ro-head, .ro-row { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr) minmax(0,2fr) minmax(0,.8fr) 112px; gap: 14px; align-items: center; padding: 0 18px; }
 .ro-head { height: 38px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: #f7fbfa; border-bottom: 1px solid var(--line); }
 .ro-row { min-height: 66px; border-bottom: 1px solid var(--line); transition: background .12s; animation: ro-slide .4s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 28ms) backwards; }
@@ -83,7 +83,6 @@ const css = `
 .ro-ib.d:hover { background: #fdecea; color: #c0392b; border-color: #f6cfca; }
 .ro-ib:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 
-/* grid */
 .ro-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px; }
 .ro-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden;
   transition: transform .22s, box-shadow .22s, border-color .22s; animation: ro-up .45s cubic-bezier(.2,.7,.2,1) calc(var(--i) * 35ms) backwards; }
@@ -183,6 +182,9 @@ function Tile({ label, target, decimals = 0, icon: Icon, tone, hero, delay }) {
 }
 
 export default function RolePermissionPage() {
+  const { t } = useTranslation();
+  const tro = t.roles;
+
   const [roles, setRoles] = useState([]);
   const [allPerms, setAllPerms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -190,7 +192,6 @@ export default function RolePermissionPage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('name');
 
-  // Modal states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isPermissionListOpen, setIsPermissionListOpen] = useState(false);
   const [viewingRole, setViewingRole] = useState(null);
@@ -214,7 +215,9 @@ export default function RolePermissionPage() {
       setAllPerms(Array.isArray(perms) ? perms : []);
     } catch (error) {
       console.error('Error fetching roles:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យតួនាទី');
+      const msg = error.message || tro.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tro.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
@@ -229,9 +232,12 @@ export default function RolePermissionPage() {
       setDeleteError('');
       await deleteRole(deletingRole.id);
       setDeletingRole(null);
+      toastr.success(tro.toastDeleteSuccessTitle, tro.toastDeleteSuccessMsg);
       fetchRoles();
     } catch (err) {
-      setDeleteError(err?.message || 'បរាជ័យក្នុងការលុបតួនាទីនេះ');
+      const msg = err?.message || tro.deleteError;
+      setDeleteError(msg);
+      toastr.error(tro.toastErrorTitle, msg);
     } finally {
       setIsDeleting(false);
     }
@@ -257,26 +263,27 @@ export default function RolePermissionPage() {
   return (
     <Layout>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="ro">
         <div className="ro-top">
           <div>
-            <h2>🛡️ តួនាទី និងសិទ្ធិ</h2>
-            <p>កំណត់សិទ្ធិអំណាច និងមុខងារដែលបុគ្គលិកអាចប្រើប្រាស់ក្នុងប្រព័ន្ធ POS</p>
+            <h2>{tro.heading}</h2>
+            <p>{tro.subHeading}</p>
           </div>
           <div className="ro-actions">
-            <button className="ro-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បន្ថែមតួនាទីថ្មី</button>
-            <button className="ro-btn" onClick={() => setIsPermissionListOpen(true)}><Lock size={16} /> គ្រប់គ្រងសិទ្ធិ</button>
-            <button className="ro-btn icon" onClick={fetchRoles} disabled={loading} aria-label="Refresh" title="Refresh"><RefreshCw size={16} className={loading ? 'ro-spin' : ''} /></button>
+            <button className="ro-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {tro.addNew}</button>
+            <button className="ro-btn" onClick={() => setIsPermissionListOpen(true)}><Lock size={16} /> {tro.managePerms}</button>
+            <button className="ro-btn icon" onClick={fetchRoles} disabled={loading} aria-label={tro.refresh} title={tro.refresh}><RefreshCw size={16} className={loading ? 'ro-spin' : ''} /></button>
           </div>
         </div>
 
-        {errorMsg && <div className="ro-err" role="alert"><span>{errorMsg}</span><button onClick={fetchRoles}>Try again</button></div>}
+        {errorMsg && <div className="ro-err" role="alert"><span>{errorMsg}</span><button onClick={fetchRoles}>{tro.tryAgain}</button></div>}
 
         <div className="ro-tiles">
-          <Tile label="តួនាទីសរុប (Roles)" target={stats.roles} icon={ShieldCheck} tone="t-dark" hero delay={0} />
-          <Tile label="សិទ្ធិក្នុងប្រព័ន្ធ" target={stats.totalPerms} icon={Lock} tone="t-blue" delay={70} />
-          <Tile label="សិទ្ធិជាមធ្យម/តួនាទី" target={stats.avg} decimals={1} icon={Gauge} tone="t-green" delay={140} />
-          <Tile label="តួនាទីគ្មានសិទ្ធិ" target={stats.empty} icon={ShieldOff} tone="t-amber" delay={210} />
+          <Tile label={tro.tileTotalRoles} target={stats.roles} icon={ShieldCheck} tone="t-dark" hero delay={0} />
+          <Tile label={tro.tileSystemPerms} target={stats.totalPerms} icon={Lock} tone="t-blue" delay={70} />
+          <Tile label={tro.tileAvgPerms} target={stats.avg} decimals={1} icon={Gauge} tone="t-green" delay={140} />
+          <Tile label={tro.tileEmptyRoles} target={stats.empty} icon={ShieldOff} tone="t-amber" delay={210} />
         </div>
 
         <section className="ro-panel">
@@ -284,15 +291,15 @@ export default function RolePermissionPage() {
             <div className="ro-left">
               <div className="ro-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ស្វែងរកតួនាទី ឬសិទ្ធិ…" aria-label="Search roles" />
-                {search && <button className="ro-x" onClick={() => setSearch('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tro.searchPlaceholder} aria-label="Search roles" />
+                {search && <button className="ro-x" onClick={() => setSearch('')} aria-label={tro.clearSearch}><X size={15} /></button>}
               </div>
             </div>
             <div className="ro-right">
               <select className="ro-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort roles">
-                <option value="name">Name A–Z</option>
-                <option value="perms">Most permissions</option>
-                <option value="newest">Newest first</option>
+                <option value="name">{tro.sortName}</option>
+                <option value="perms">{tro.sortPerms}</option>
+                <option value="newest">{tro.sortNewest}</option>
               </select>
             </div>
           </div>
@@ -301,8 +308,8 @@ export default function RolePermissionPage() {
             <div className="ro-cards">{[0, 1, 2].map((i) => <div className="ro-card ro-ghost" key={i}><i /><i /><i /></div>)}</div>
           ) : visible.length === 0 ? (
             <div className="ro-empty">
-              <b>{roles.length === 0 ? 'រកមិនឃើញទិន្នន័យតួនាទីទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {roles.length > 0 && 'Try a different role or permission name.'}
+              <b>{roles.length === 0 ? tro.emptyNoData : tro.emptyNoResult}</b>
+              {roles.length > 0 && tro.emptyHint}
             </div>
           ) : (
             <div className="ro-cards" key={sort}>
@@ -318,20 +325,20 @@ export default function RolePermissionPage() {
                         <div style={{ minWidth: 0 }}><b>{r.name}</b><span className="ro-sub">ID #{r.id} · {fmtDate(r.created_at)}</span></div>
                       </div>
                       <div>
-                        <div className="ro-cov"><span>{perms.length}{allPerms.length ? ` / ${allPerms.length}` : ''} permissions</span>{allPerms.length > 0 && <em>{pct.toFixed(0)}%</em>}</div>
+                        <div className="ro-cov"><span>{perms.length}{allPerms.length ? ` / ${allPerms.length}` : ''} {tro.permissionsLabel}</span>{allPerms.length > 0 && <em>{pct.toFixed(0)}%</em>}</div>
                         {allPerms.length > 0 && <div className="ro-meter"><i style={{ transform: `scaleX(${pct / 100})`, background: fg, animationDelay: `${i * 60 + 200}ms` }} /></div>}
                       </div>
                       <div className="ro-chips">
-                        {perms.length === 0 ? <span className="ro-none">គ្មានសិទ្ធិ</span> : perms.slice(0, 5).map((p) => <span className="ro-chip" key={p.id}>{p.name}</span>)}
+                        {perms.length === 0 ? <span className="ro-none">{tro.noPermissions}</span> : perms.slice(0, 5).map((p) => <span className="ro-chip" key={p.id}>{p.name}</span>)}
                         {perms.length > 5 && <span className="ro-more">+{perms.length - 5}</span>}
                       </div>
                     </div>
                     <div className="ro-cfoot">
-                      <button className="ro-link" onClick={() => setViewingRole(r)}>View permissions</button>
+                      <button className="ro-link" onClick={() => setViewingRole(r)}>{tro.viewPermissions}</button>
                       <div className="ro-acts">
-                        <button className="ro-ib v" onClick={() => setViewingRole(r)} aria-label="View role" title="មើល"><Eye size={15} /></button>
-                        <button className="ro-ib e" onClick={() => setEditingRole(r)} aria-label="Edit role" title="កែប្រែ"><Pencil size={15} /></button>
-                        <button className="ro-ib d" onClick={() => askDelete(r)} aria-label="Delete role" title="លុប"><Trash2 size={15} /></button>
+                        <button className="ro-ib v" onClick={() => setViewingRole(r)} aria-label="View role" title={tro.viewTitle}><Eye size={15} /></button>
+                        <button className="ro-ib e" onClick={() => setEditingRole(r)} aria-label="Edit role" title={tro.editTitle}><Pencil size={15} /></button>
+                        <button className="ro-ib d" onClick={() => askDelete(r)} aria-label="Delete role" title={tro.deleteTitle}><Trash2 size={15} /></button>
                       </div>
                     </div>
                   </div>
@@ -342,14 +349,40 @@ export default function RolePermissionPage() {
         </section>
       </div>
 
-      <CreateRoleModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} onSuccess={fetchRoles} />
-      <PermissionListModal isOpen={isPermissionListOpen} onClose={() => setIsPermissionListOpen(false)} onSuccessRole={fetchRoles} />
-      <ViewRoleModal isOpen={Boolean(viewingRole)} role={viewingRole} onClose={() => setViewingRole(null)} onEdit={(r) => setEditingRole(r)} onDelete={askDelete} />
-      <EditRoleModal isOpen={Boolean(editingRole)} role={editingRole} onClose={() => setEditingRole(null)} onSuccess={fetchRoles} />
+      <CreateRoleModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={() => {
+          fetchRoles();
+          toastr.success(tro.toastCreateSuccessTitle, tro.toastCreateSuccessMsg);
+        }}
+      />
+      <PermissionListModal
+        isOpen={isPermissionListOpen}
+        onClose={() => setIsPermissionListOpen(false)}
+        onSuccessRole={fetchRoles}
+      />
+      <ViewRoleModal
+        isOpen={Boolean(viewingRole)}
+        role={viewingRole}
+        onClose={() => setViewingRole(null)}
+        onEdit={(r) => setEditingRole(r)}
+        onDelete={askDelete}
+      />
+      <EditRoleModal
+        isOpen={Boolean(editingRole)}
+        role={editingRole}
+        onClose={() => setEditingRole(null)}
+        onSuccess={() => {
+          fetchRoles();
+          toastr.success(tro.toastUpdateSuccessTitle, tro.toastUpdateSuccessMsg);
+        }}
+      />
       <ConfirmDeleteModal
         isOpen={Boolean(deletingRole)}
-        title="បញ្ជាក់ការលុបតួនាទី"
-        message={<>តើអ្នកពិតជាចង់លុបតួនាទី <b>“{deletingRole?.name}”</b> នេះមែនទេ? អ្នកប្រើដែលមានតួនាទីនេះនឹងបាត់សិទ្ធិ។</>}
+        title={tro.deleteModalTitle}
+        message={<>{tro.deleteModalPrefix} <b>“{deletingRole?.name}”</b> {tro.deleteModalSuffix}</>}
+        confirmLabel={tro.deleteModalConfirm}
         busy={isDeleting}
         error={deleteError}
         onCancel={() => setDeletingRole(null)}

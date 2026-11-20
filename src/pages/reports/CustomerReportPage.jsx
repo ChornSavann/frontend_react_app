@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import Sidebar, { SIDEBAR_WIDTH } from "../../components/Sidebar";
 import Appbar from "../../components/Appbar";
 import { CustomerReports } from "../../services/reportService";
+import ToastrContainer, { toastr } from "../../components/Toastr";
+import { useTranslation } from "../../utils/translations";
 import {
   Search,
   Users,
@@ -113,7 +115,7 @@ const css = `
 .cr-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3bb5a4, #1a7d70); transition: width .6s cubic-bezier(.2,.8,.2,1); }
 
 .cr-acts { display: inline-flex; gap: 4px; }
-.cr-act { all: unset; cursor: pointer; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 11px; color: var(--muted); transition: background .18s, color .18s, transform .15s; }
+.cr-act { all: unset; cursor: pointer; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: var(--muted); transition: background .18s, color .18s, transform .15s; }
 .cr-act:hover { background: var(--mint); color: var(--teal-d); transform: translateY(-1px); }
 .cr-act:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 
@@ -190,7 +192,6 @@ const css = `
 /* ---------- print: only the report sheet, flowing over as many pages as needed ---------- */
 @media print {
   @page { size: auto; margin: 10mm; }
-  /* បិទ layout លំនាំដើមរបស់ Vite (body flex, #root max-width/padding/center) ដែលធ្វើឲ្យសន្លឹកធំជាងទំព័រ */
   html, body { display: block !important; width: auto !important; min-width: 0 !important; height: auto !important; overflow: visible !important; }
   #root { display: block !important; width: auto !important; min-width: 0 !important; max-width: none !important; margin: 0 !important; padding: 0 !important; text-align: left !important; }
   .cr, .cr-ovl, .cr-sheet { width: 100% !important; }
@@ -208,13 +209,10 @@ const css = `
 const money = (val) =>
   Number(val || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDateTime = (dateStr) => {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("km-KH");
-};
-
 export default function CustomerReportPage() {
+  const { lang, t } = useTranslation();
+  const tcr = t.customerReports;
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -223,6 +221,20 @@ export default function CustomerReportPage() {
 
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [printPending, setPrintPending] = useState(false);
+
+  const fmtDateTime = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return Number.isNaN(d.getTime())
+      ? ""
+      : d.toLocaleString(lang === "km" ? "km-KH" : "en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  };
 
   useEffect(() => {
     fetchCustomers();
@@ -237,13 +249,14 @@ export default function CustomerReportPage() {
       setCustomers(list);
     } catch (err) {
       console.error("Error fetching customer reports:", err);
-      setErrorMsg(err?.message || "បរាជ័យក្នុងការទាញយករបាយការណ៍អតិថិជន");
+      const msg = err?.message || tcr.fetchError;
+      setErrorMsg(msg);
+      toastr.error(tcr.toastErrorTitle, msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // បិទ Modal ដោយចុច Esc
   useEffect(() => {
     if (!selectedCustomer) return undefined;
     const onKey = (e) => {
@@ -253,7 +266,6 @@ export default function CustomerReportPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedCustomer]);
 
-  // បើកបោះពុម្ពបន្ទាប់ពី Modal បង្ហាញរួច
   useEffect(() => {
     if (!selectedCustomer || !printPending) return undefined;
     const t = setTimeout(() => {
@@ -297,9 +309,9 @@ export default function CustomerReportPage() {
   }, [customers]);
 
   const statCards = [
-    { label: "អតិថិជនសរុប", value: stats.totalCustomers, unit: "នាក់", icon: Users, tone: "t1" },
-    { label: "ចំណូលសរុបពីអតិថិជន", value: `$${money(stats.grandTotalSpent)}`, icon: DollarSign, tone: "t2", money: true },
-    { label: "មធ្យមក្នុងមួយអតិថិជន", value: `$${money(stats.average)}`, icon: TrendingUp, tone: "t3" },
+    { label: tcr.statTotalCustomers, value: stats.totalCustomers, unit: tcr.personSuffix, icon: Users, tone: "t1" },
+    { label: tcr.statTotalRevenue, value: `$${money(stats.grandTotalSpent)}`, icon: DollarSign, tone: "t2", money: true },
+    { label: tcr.statAverage, value: `$${money(stats.average)}`, icon: TrendingUp, tone: "t3" },
   ];
 
   const hasSearch = search.trim() !== "";
@@ -308,6 +320,7 @@ export default function CustomerReportPage() {
   return (
     <>
       <style>{css}</style>
+      <ToastrContainer />
       <div className="cr">
         <div className="cr-noprint">
           <Sidebar onCollapseChange={(_, width) => setSidebarWidth(width)} />
@@ -325,15 +338,16 @@ export default function CustomerReportPage() {
                 </div>
                 <div>
                   <h2 className="cr-title">
-                    របាយការណ៍អតិថិជន<small>Customer Reports</small>
+                    {tcr.heading}
+                    {lang === "km" && <small>Customer Reports</small>}
                   </h2>
-                  <p className="cr-sub">ស្ថិតិការទិញ និងប្រវត្តិវិក្កយបត្ររបស់អតិថិជនម្នាក់ៗ</p>
+                  <p className="cr-sub">{tcr.subHeading}</p>
                 </div>
               </div>
 
               <button className="cr-btn ghost" onClick={fetchCustomers} disabled={loading}>
                 <RefreshCw size={16} className={loading ? "cr-spin" : ""} />
-                <span>ផ្ទុកឡើងវិញ</span>
+                <span>{tcr.refresh}</span>
               </button>
             </div>
 
@@ -362,7 +376,7 @@ export default function CustomerReportPage() {
               <div className="cr-error" role="alert">
                 <span>{errorMsg}</span>
                 <button type="button" onClick={fetchCustomers}>
-                  ព្យាយាមម្តងទៀត
+                  {tcr.tryAgain}
                 </button>
               </div>
             )}
@@ -374,26 +388,26 @@ export default function CustomerReportPage() {
                   <Search size={17} />
                   <input
                     type="text"
-                    placeholder="ស្វែងរកតាមឈ្មោះ, លេខទូរស័ព្ទ ឬអ៊ីមែល..."
+                    placeholder={tcr.searchPlaceholder}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    aria-label="ស្វែងរកអតិថិជន"
+                    aria-label={tcr.searchPlaceholder}
                   />
                   {hasSearch && (
-                    <button type="button" className="cr-clear" onClick={() => setSearch("")} aria-label="លុបការស្វែងរក">
+                    <button type="button" className="cr-clear" onClick={() => setSearch("")} aria-label={tcr.clearSearch}>
                       <X size={16} />
                     </button>
                   )}
                 </div>
                 {!loading && (
                   <div className="cr-count">
-                    បង្ហាញ <b>{filteredCustomers.length}</b> / {customers.length} នាក់
+                    {tcr.showing} <b>{filteredCustomers.length}</b> / {customers.length} {tcr.personSuffix}
                   </div>
                 )}
               </div>
 
               {loading ? (
-                <div aria-busy="true" aria-label="កំពុងទាញយកទិន្នន័យ">
+                <div aria-busy="true">
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div className="cr-skel-row" key={i}>
                       <div className="cr-skel" style={{ width: 50 }} />
@@ -410,15 +424,15 @@ export default function CustomerReportPage() {
                     <Users size={32} strokeWidth={1.7} />
                   </div>
                   <h3 className="cr-emptytitle">
-                    {hasSearch ? "រកមិនឃើញអតិថិជនទេ" : "មិនមានទិន្នន័យអតិថិជនទេ"}
+                    {hasSearch ? tcr.emptySearch : tcr.emptyNoData}
                   </h3>
                   <p className="cr-emptytext">
-                    {hasSearch ? "សូមសាកល្បងស្វែងរកដោយពាក្យផ្សេង" : "នៅពេលមានអតិថិជនទិញទំនិញ ទិន្នន័យនឹងបង្ហាញនៅទីនេះ"}
+                    {hasSearch ? tcr.emptySubSearch : tcr.emptySubNoData}
                   </p>
                   {hasSearch && (
                     <button className="cr-btn ghost" onClick={() => setSearch("")}>
                       <X size={16} />
-                      <span>លុបការស្វែងរក</span>
+                      <span>{tcr.clearSearch}</span>
                     </button>
                   )}
                 </div>
@@ -435,12 +449,12 @@ export default function CustomerReportPage() {
                     </colgroup>
                     <thead>
                       <tr>
-                        <th style={{ width: 80 }}># ID</th>
-                        <th>ឈ្មោះអតិថិជន</th>
-                        <th>លេខទូរស័ព្ទ</th>
-                        <th style={{ textAlign: "center" }}>ចំនួនវិក្កយបត្រ</th>
-                        <th style={{ textAlign: "right" }}>ទឹកប្រាក់ទិញសរុប</th>
-                        <th style={{ textAlign: "center" }}>សកម្មភាព</th>
+                        <th style={{ width: 80 }}>{tcr.colId}</th>
+                        <th>{tcr.colCustomerName}</th>
+                        <th>{tcr.colPhone}</th>
+                        <th style={{ textAlign: "center" }}>{tcr.colOrdersCount}</th>
+                        <th style={{ textAlign: "right" }}>{tcr.colTotalSpent}</th>
+                        <th style={{ textAlign: "center" }}>{tcr.colActions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -471,7 +485,7 @@ export default function CustomerReportPage() {
                               )}
                             </td>
                             <td style={{ textAlign: "center" }}>
-                              <span className="cr-orders">{c.orders_count ?? c.orders?.length ?? 0} ដង</span>
+                              <span className="cr-orders">{c.orders_count ?? c.orders?.length ?? 0} {tcr.ordersSuffix}</span>
                             </td>
                             <td className="cr-spent">
                               <b>${money(spent)}</b>
@@ -485,8 +499,8 @@ export default function CustomerReportPage() {
                                   type="button"
                                   className="cr-act"
                                   onClick={() => openView(c)}
-                                  title="មើល"
-                                  aria-label={`មើលរបាយការណ៍ ${c.name}`}
+                                  title={tcr.viewTitle}
+                                  aria-label={`${tcr.viewTitle} ${c.name}`}
                                 >
                                   <Eye size={17} />
                                 </button>
@@ -494,8 +508,8 @@ export default function CustomerReportPage() {
                                   type="button"
                                   className="cr-act"
                                   onClick={() => openPrint(c)}
-                                  title="បោះពុម្ព"
-                                  aria-label={`បោះពុម្ពរបាយការណ៍ ${c.name}`}
+                                  title={tcr.printTitle}
+                                  aria-label={`${tcr.printTitle} ${c.name}`}
                                 >
                                   <Printer size={17} />
                                 </button>
@@ -522,18 +536,18 @@ export default function CustomerReportPage() {
               aria-labelledby="cr-sheet-title"
               onClick={(e) => e.stopPropagation()}
             >
-              <button className="cr-x cr-noprint" onClick={closeSheet} aria-label="បិទ">
+              <button className="cr-x cr-noprint" onClick={closeSheet} aria-label={tcr.closeBtn}>
                 <X size={18} />
               </button>
 
               <div className="cr-sheetbody">
                 {/* Header */}
                 <div className="cr-sheethead">
-                  <span className="cr-badge">Customer Report &amp; Products Bought</span>
+                  <span className="cr-badge">{tcr.modalBadge}</span>
                   <h2 className="cr-sheettitle" id="cr-sheet-title">
-                    របាយការណ៍ទិញទំនិញរបស់អតិថិជន៖ {selectedCustomer.name}
+                    {tcr.modalTitlePrefix} {selectedCustomer.name}
                   </h2>
-                  <p className="cr-sheetsub">បោះពុម្ពនៅថ្ងៃ {new Date().toLocaleDateString("km-KH")}</p>
+                  <p className="cr-sheetsub">{tcr.printedOn} {fmtDateTime(new Date()) || new Date().toLocaleDateString("km-KH")}</p>
                 </div>
 
                 {/* Customer Info */}
@@ -541,28 +555,28 @@ export default function CustomerReportPage() {
                   <div className="cr-infoitem">
                     <span className="cr-infoico"><Phone size={16} /></span>
                     <div>
-                      <div className="cr-infolabel">ទូរស័ព្ទ</div>
+                      <div className="cr-infolabel">{tcr.phoneLabel}</div>
                       <div className="cr-infoval">{selectedCustomer.phone || "N/A"}</div>
                     </div>
                   </div>
                   <div className="cr-infoitem">
                     <span className="cr-infoico"><MapPin size={16} /></span>
                     <div>
-                      <div className="cr-infolabel">អាសយដ្ឋាន</div>
+                      <div className="cr-infolabel">{tcr.addressLabel}</div>
                       <div className="cr-infoval">{selectedCustomer.address || "N/A"}</div>
                     </div>
                   </div>
                   <div className="cr-infoitem">
                     <span className="cr-infoico"><Receipt size={16} /></span>
                     <div>
-                      <div className="cr-infolabel">ចំនួនវិក្កយបត្រសរុប</div>
-                      <div className="cr-infoval">{orders.length} ដង</div>
+                      <div className="cr-infolabel">{tcr.totalOrdersLabel}</div>
+                      <div className="cr-infoval">{orders.length} {tcr.ordersSuffix}</div>
                     </div>
                   </div>
                   <div className="cr-infoitem">
                     <span className="cr-infoico"><DollarSign size={16} /></span>
                     <div>
-                      <div className="cr-infolabel">ទឹកប្រាក់សរុប</div>
+                      <div className="cr-infolabel">{tcr.totalSpentLabel}</div>
                       <div className="cr-infoval money">${money(selectedCustomer.total_spent)}</div>
                     </div>
                   </div>
@@ -571,7 +585,7 @@ export default function CustomerReportPage() {
                 {/* Orders & Products Breakdown */}
                 <h4 className="cr-sec">
                   <FileText size={16} />
-                  ប្រវត្តិវិក្កយបត្រ និងទំនិញដែលបានទិញ
+                  {tcr.sectionTitle}
                 </h4>
 
                 {orders.length > 0 ? (
@@ -592,11 +606,11 @@ export default function CustomerReportPage() {
                       <table className="cr-items">
                         <thead>
                           <tr>
-                            <th style={{ width: 44 }}>ល.រ</th>
-                            <th>ឈ្មោះទំនិញ</th>
-                            <th className="c">ចំនួន</th>
-                            <th className="r">តម្លៃឯកតា</th>
-                            <th className="r">សរុប</th>
+                            <th style={{ width: 44 }}>{tcr.colNo}</th>
+                            <th>{tcr.colProductName}</th>
+                            <th className="c">{tcr.colQty}</th>
+                            <th className="r">{tcr.colUnitPrice}</th>
+                            <th className="r">{tcr.colItemTotal}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -604,7 +618,7 @@ export default function CustomerReportPage() {
                             ord.details.map((detail, dIdx) => (
                               <tr key={detail.id ?? dIdx}>
                                 <td>{dIdx + 1}</td>
-                                <td className="pn">{detail.product?.name || detail.product_name || "ទំនិញ"}</td>
+                                <td className="pn">{detail.product?.name || detail.product_name || tcr.defaultProduct}</td>
                                 <td className="c qty">{detail.quantity}</td>
                                 <td className="r">${money(detail.unit_price || detail.price || detail.unit_cost)}</td>
                                 <td className="r sum">
@@ -615,7 +629,7 @@ export default function CustomerReportPage() {
                           ) : (
                             <tr>
                               <td colSpan="5" className="none">
-                                (គ្មានព័ត៌មានលម្អិតទំនិញ)
+                                {tcr.noDetails}
                               </td>
                             </tr>
                           )}
@@ -624,18 +638,18 @@ export default function CustomerReportPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="cr-noorders">(អតិថិជននេះមិនទាន់មានប្រវត្តិទិញទំនិញទេ)</p>
+                  <p className="cr-noorders">{tcr.noOrders}</p>
                 )}
               </div>
 
               {/* Modal Actions */}
               <div className="cr-sheetfoot cr-noprint">
                 <button className="cr-btn ghost" onClick={closeSheet}>
-                  បិទ
+                  {tcr.closeBtn}
                 </button>
                 <button className="cr-btn primary" onClick={() => window.print()}>
                   <Printer size={16} />
-                  <span>បោះពុម្ព</span>
+                  <span>{tcr.printBtn}</span>
                 </button>
               </div>
             </div>

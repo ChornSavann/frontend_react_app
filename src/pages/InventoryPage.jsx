@@ -6,6 +6,7 @@ import Layout from '../components/Layout';
 import CreateProductModal from './products/CreateProductModal';
 import EditProductModal from './products/EditProductModal';
 import ViewProductModal from './products/ViewProductModal';
+import { useTranslation } from '../utils/translations';
 
 const css = `
 .iv { --ink:#0f1f1d; --muted:#6a8280; --line:#e6eeec; --teal:#0f766e;
@@ -196,40 +197,43 @@ function Avatar({ p }) {
   );
 }
 
-function StockCell({ p, i }) {
+function StockCell({ p, i, ti }) {
   const s = num(p.stock_quantity), a = num(p.alert_quantity), st = stockOf(p);
   const cap = a > 0 ? a * 3 : 30;
   const pct = Math.max(s > 0 ? 6 : 0, Math.min(s / cap, 1) * 100);
   return (
     <div className="iv-stock">
       <b>{s}<small>{unitOf(p)}</small></b>
-      <div className="iv-bar" title={`Alert level: ${a}`}><i className={st} style={{ transform: `scaleX(${pct / 100})`, animationDelay: `${i * 28 + 150}ms` }} /></div>
+      <div className="iv-bar" title={`${ti.alertLevel}: ${a}`}><i className={st} style={{ transform: `scaleX(${pct / 100})`, animationDelay: `${i * 28 + 150}ms` }} /></div>
     </div>
   );
 }
 
-function RowActions({ onView, onEdit }) {
+function RowActions({ onView, onEdit, ti }) {
   return (
     <div className="iv-acts">
-      <button className="iv-ib v" onClick={onView} aria-label="View product" title="មើល"><Eye size={15} /></button>
-      <button className="iv-ib e" onClick={onEdit} aria-label="Edit product" title="កែប្រែ"><Pencil size={15} /></button>
+      <button className="iv-ib v" onClick={onView} aria-label="View product" title={ti.viewTitle}><Eye size={15} /></button>
+      <button className="iv-ib e" onClick={onEdit} aria-label="Edit product" title={ti.editTitle}><Pencil size={15} /></button>
     </div>
   );
 }
 
-function ActiveBadge({ p }) {
+function ActiveBadge({ p, ti }) {
   return isActive(p)
-    ? <span className="iv-badge on"><CheckCircle2 size={13} /> Active</span>
-    : <span className="iv-badge off"><XCircle size={13} /> Inactive</span>;
+    ? <span className="iv-badge on"><CheckCircle2 size={13} /> {ti.statusActive}</span>
+    : <span className="iv-badge off"><XCircle size={13} /> {ti.statusInactive}</span>;
 }
 
-function StockWarn({ p }) {
+function StockWarn({ p, ti }) {
   const st = stockOf(p);
   if (st === 'in') return null;
-  return <span className={`iv-warn ${st}`}><AlertTriangle size={11} />{st === 'out' ? 'Out of stock' : 'Low stock'}</span>;
+  return <span className={`iv-warn ${st}`}><AlertTriangle size={11} />{st === 'out' ? ti.outOfStock : ti.lowStock}</span>;
 }
 
 export default function InventoryPage() {
+  const { t } = useTranslation();
+  const ti = t.inventory;
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -254,12 +258,11 @@ export default function InventoryPage() {
       setLoading(true);
       setErrorMsg('');
       const res = await listproduct();
-      // ទាញយក Array ពី res.data តាមទម្រង់ JSON
       const items = res?.data || (Array.isArray(res) ? res : []);
       setProducts(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('Error fetching products:', error);
-      setErrorMsg(error.message || 'បរាជ័យក្នុងការទាញយកទិន្នន័យទំនិញ');
+      setErrorMsg(error.message || ti.fetchError);
     } finally {
       setLoading(false);
     }
@@ -282,7 +285,6 @@ export default function InventoryPage() {
     return { counts, value };
   }, [products]);
 
-  // Category, Brand, Unit ពីទំនិញដែលមានស្រាប់ ទុកបោះឱ្យ Modal
   const existingOptions = useMemo(() => {
     const cat = new Map(), brand = new Map(), unit = new Map();
     products.forEach((p) => {
@@ -331,10 +333,10 @@ export default function InventoryPage() {
   };
 
   const FILTERS = [
-    { key: 'all', label: 'All' },
-    { key: 'active', label: 'Active' },
-    { key: 'inactive', label: 'Inactive' },
-    { key: 'low', label: 'Low stock' },
+    { key: 'all', label: ti.filterAll },
+    { key: 'active', label: ti.filterActive },
+    { key: 'inactive', label: ti.filterInactive },
+    { key: 'low', label: ti.filterLow },
   ];
 
   return (
@@ -343,14 +345,14 @@ export default function InventoryPage() {
       <div className="iv">
         <div className="iv-top">
           <div>
-            <h2>📦 បញ្ជីទំនិញក្នុងឃ្លាំង</h2>
-            <p>គ្រប់គ្រងព័ត៌មានទំនិញ តម្លៃដើម តម្លៃលក់ និងចំនួនស្តុកជាក់ស្តែង</p>
+            <h2>{ti.heading}</h2>
+            <p>{ti.subHeading}</p>
           </div>
           <div className="iv-actions">
-            <button className="iv-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> បន្ថែមទំនិញថ្មី</button>
-            <button className="iv-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> Export CSV</button>
+            <button className="iv-btn primary" onClick={() => setIsCreateOpen(true)}><Plus size={16} /> {ti.addNew}</button>
+            <button className="iv-btn" onClick={exportCsv} disabled={visible.length === 0}><Download size={16} /> {ti.exportCsv}</button>
             <button className="iv-btn" onClick={fetchProducts} disabled={loading}>
-              <RefreshCw size={16} className={loading ? 'iv-spin' : ''} /> ផ្ទុកឡើងវិញ
+              <RefreshCw size={16} className={loading ? 'iv-spin' : ''} /> {ti.refresh}
             </button>
           </div>
         </div>
@@ -358,15 +360,15 @@ export default function InventoryPage() {
         {errorMsg && (
           <div className="iv-err" role="alert">
             <span>{errorMsg}</span>
-            <button onClick={fetchProducts}>Try again</button>
+            <button onClick={fetchProducts}>{ti.tryAgain}</button>
           </div>
         )}
 
         <div className="iv-tiles">
-          <Tile label="Stock value (at cost)" target={stats.value} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
-          <Tile label="ទំនិញសរុប (Total)" target={stats.counts.all} icon={Package} tone="t-blue" delay={70} />
-          <Tile label="កំពុងដាក់លក់ (Active)" target={stats.counts.active} icon={Boxes} tone="t-green" delay={140} />
-          <Tile label="ស្តុកជិតអស់ (Low)" target={stats.counts.low} icon={AlertTriangle} tone="t-amber" delay={210} />
+          <Tile label={ti.tileStockValue} target={stats.value} prefix="$" decimals={2} icon={DollarSign} tone="t-dark" hero delay={0} />
+          <Tile label={ti.tileTotal} target={stats.counts.all} icon={Package} tone="t-blue" delay={70} />
+          <Tile label={ti.tileActive} target={stats.counts.active} icon={Boxes} tone="t-green" delay={140} />
+          <Tile label={ti.tileLow} target={stats.counts.low} icon={AlertTriangle} tone="t-amber" delay={210} />
         </div>
 
         <section className="iv-panel">
@@ -374,8 +376,8 @@ export default function InventoryPage() {
             <div className="iv-left">
               <div className="iv-search">
                 <Search size={16} />
-                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder="ស្វែងរកឈ្មោះ, SKU, Barcode…" aria-label="Search products" />
-                {search && <button className="iv-x" onClick={() => reset(setSearch)('')} aria-label="Clear search"><X size={15} /></button>}
+                <input value={search} onChange={(e) => reset(setSearch)(e.target.value)} placeholder={ti.searchPlaceholder} aria-label="Search products" />
+                {search && <button className="iv-x" onClick={() => reset(setSearch)('')} aria-label={ti.clearSearch}><X size={15} /></button>}
               </div>
               <div className="iv-chips" role="tablist" aria-label="Filter products">
                 {FILTERS.map((f) => (
@@ -387,24 +389,24 @@ export default function InventoryPage() {
             </div>
             <div className="iv-right">
               <select className="iv-select" value={selectedCategory} onChange={(e) => reset(setSelectedCategory)(e.target.value)} aria-label="Category">
-                <option value="all">All categories</option>
+                <option value="all">{ti.allCategories}</option>
                 {categories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
               </select>
               <select className="iv-select" value={sort} onChange={(e) => reset(setSort)(e.target.value)} aria-label="Sort products">
-                <option value="name">Name A–Z</option>
-                <option value="price">Price: high to low</option>
-                <option value="stock">Stock: low first</option>
+                <option value="name">{ti.sortName}</option>
+                <option value="price">{ti.sortPrice}</option>
+                <option value="stock">{ti.sortStock}</option>
               </select>
               <div className="iv-view" role="group" aria-label="View">
-                <button className={`iv-chip${view === 'list' ? ' on' : ''}`} onClick={() => reset(setView)('list')} aria-label="List view" aria-pressed={view === 'list'}><List size={16} /></button>
-                <button className={`iv-chip${view === 'grid' ? ' on' : ''}`} onClick={() => reset(setView)('grid')} aria-label="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
+                <button className={`iv-chip${view === 'list' ? ' on' : ''}`} onClick={() => reset(setView)('list')} aria-label={ti.listView} aria-pressed={view === 'list'}><List size={16} /></button>
+                <button className={`iv-chip${view === 'grid' ? ' on' : ''}`} onClick={() => reset(setView)('grid')} aria-label={ti.gridView} aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
               </div>
             </div>
           </div>
 
           {view === 'list' && (
             <div className="iv-head">
-              <span>Product</span><span className="iv-hide-m">SKU / Barcode</span><span className="iv-hide-m iv-hide-md">Category</span><span>Price</span><span>Stock</span><span>Status</span><span />
+              <span>{ti.colProduct}</span><span className="iv-hide-m">{ti.colSkuBarcode}</span><span className="iv-hide-m iv-hide-md">{ti.colCategory}</span><span>{ti.colPrice}</span><span>{ti.colStock}</span><span>{ti.colStatus}</span><span />
             </div>
           )}
 
@@ -412,8 +414,8 @@ export default function InventoryPage() {
             [0, 1, 2, 3, 4].map((i) => <div className="iv-skel" key={i}><i style={{ width: 42, height: 42, borderRadius: 12 }} /><i style={{ width: '28%' }} /></div>)
           ) : rows.length === 0 ? (
             <div className="iv-empty">
-              <b>{products.length === 0 ? 'រកមិនឃើញទិន្នន័យទំនិញទេ' : 'រកមិនឃើញលទ្ធផល'}</b>
-              {products.length > 0 && 'Try a different search, category or filter.'}
+              <b>{products.length === 0 ? ti.emptyNoData : ti.emptyNoResult}</b>
+              {products.length > 0 && ti.emptyHint}
             </div>
           ) : view === 'list' ? (
             <div key={`l-${filter}-${current}-${sort}-${selectedCategory}`}>
@@ -424,11 +426,11 @@ export default function InventoryPage() {
                     <div style={{ minWidth: 0 }}><b>{p.name}</b>{p.description && <small>{p.description}</small>}</div>
                   </div>
                   <div className="iv-sub iv-hide-m"><b>{p.sku || '-'}</b><small>{p.barcode || '-'}</small></div>
-                  <div className="iv-sub iv-hide-m iv-hide-md"><span className="iv-tag">{p.category?.name || 'គ្មានប្រភេទ'}</span>{p.brand?.name && <small>{p.brand.name}</small>}</div>
-                  <div className="iv-price"><b>{money(p.selling_price)}</b><small>Cost {money(p.cost_price)}</small></div>
-                  <StockCell p={p} i={i} />
-                  <div className="iv-status"><ActiveBadge p={p} /><StockWarn p={p} /></div>
-                  <RowActions onView={() => setViewingProduct(p)} onEdit={() => setEditingProduct(p)} />
+                  <div className="iv-sub iv-hide-m iv-hide-md"><span className="iv-tag">{p.category?.name || ti.noCategory}</span>{p.brand?.name && <small>{p.brand.name}</small>}</div>
+                  <div className="iv-price"><b>{money(p.selling_price)}</b><small>{ti.costPrefix} {money(p.cost_price)}</small></div>
+                  <StockCell p={p} i={i} ti={ti} />
+                  <div className="iv-status"><ActiveBadge p={p} ti={ti} /><StockWarn p={p} ti={ti} /></div>
+                  <RowActions onView={() => setViewingProduct(p)} onEdit={() => setEditingProduct(p)} ti={ti} />
                 </div>
               ))}
             </div>
@@ -440,11 +442,11 @@ export default function InventoryPage() {
                   <div className="iv-card-name"><b>{p.name}</b><small>{[p.category?.name, p.brand?.name].filter(Boolean).join(' · ') || p.sku || '-'}</small></div>
                   <div className="iv-card-mid">
                     <div className="iv-price"><b>{money(p.selling_price)}</b></div>
-                    <ActiveBadge p={p} />
+                    <ActiveBadge p={p} ti={ti} />
                   </div>
-                  <StockCell p={p} i={i} />
-                  <StockWarn p={p} />
-                  <RowActions onView={() => setViewingProduct(p)} onEdit={() => setEditingProduct(p)} />
+                  <StockCell p={p} i={i} ti={ti} />
+                  <StockWarn p={p} ti={ti} />
+                  <RowActions onView={() => setViewingProduct(p)} onEdit={() => setEditingProduct(p)} ti={ti} />
                 </div>
               ))}
             </div>
@@ -452,7 +454,7 @@ export default function InventoryPage() {
 
           {!loading && visible.length > 0 && (
             <div className="iv-foot">
-              <span>Showing {start + 1}–{Math.min(start + size, visible.length)} of {visible.length}</span>
+              <span>{ti.showing} {start + 1}–{Math.min(start + size, visible.length)} {ti.of} {visible.length}</span>
               <div className="iv-pager">
                 <button className="iv-pg" onClick={() => setPage(current - 1)} disabled={current === 1} aria-label="Previous page"><ChevronLeft size={16} /></button>
                 <span>{current} / {pages}</span>
