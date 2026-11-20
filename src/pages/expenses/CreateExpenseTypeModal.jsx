@@ -2,7 +2,7 @@
 import React from 'react';
 
 
-import ExpenseTypeFormModal from './ExpenseTypeformmodal';
+import ExpenseTypeFormModal from './Expensetypeformmodal';
 
 export default function CreateExpenseTypeModal(props) {
   return <ExpenseTypeFormModal mode="create" {...props} />;

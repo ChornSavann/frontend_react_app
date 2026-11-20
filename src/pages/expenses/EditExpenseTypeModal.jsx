@@ -1,6 +1,6 @@
 // src/pages/expenses/EditExpenseTypeModal.jsx
 import React from 'react';
-import ExpenseTypeFormModal from './ExpenseTypeformmodal';
+import ExpenseTypeFormModal from './Expensetypeformmodal';
 export default function EditExpenseTypeModal(props) {
   return <ExpenseTypeFormModal mode="edit" {...props} />;
 }
