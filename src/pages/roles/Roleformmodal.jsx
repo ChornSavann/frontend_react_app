@@ -1,5 +1,4 @@
-// src/pages/roles/RoleFormModal.jsx
-// Shared form used by CreateRoleModal and EditRoleModal
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Save, ShieldCheck, Pencil, Search, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { createRole, updateRole, listPermissions } from '../../services/rolePermissionService';
